@@ -1,0 +1,15 @@
+# develop
+.vscode
+.env
+memo.ipynb
+
+# build
+*.egg-info
+
+# data
+*.pth
+*.png
+
+# cache
+__pycache__
+.ipynb_checkpoints

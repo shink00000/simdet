@@ -31,8 +31,46 @@ def save(image, bboxes, labels, file_name):
     image.save(osp.join(dir_path, f'{file_name}.png'))
 
 
+def test_photo_metric_distortion():
+    data = load()
+    t = T.PhotoMetricDistortion()
+    for i in range(4):
+        image, bboxes, labels = t(data)
+        save(image, bboxes, labels, f'photo_{i}')
+
+
+def test_normalize():
+    data = load()
+    t = T.Normalize()
+    image, bboxes, labels = t(data)
+    save(image, bboxes, labels, 'normalize')
+
+
+def test_random_expand():
+    data = load()
+    t = T.RandomExpand(p=1.0)
+    for i in range(4):
+        image, bboxes, labels = t(data)
+        save(image, bboxes, labels, f'expand_{i}')
+
+
+def test_random_miniou_crop():
+    data = load()
+    t = T.RandomMinIoUCrop(p=1.0)
+    for i in range(4):
+        image, bboxes, labels = t(data)
+        save(image, bboxes, labels, f'crop_{i}')
+
+
 def test_resize():
     data = load()
     t = T.Resize([256, 512])
     image, bboxes, labels = t(data)
     save(image, bboxes, labels, 'resize')
+
+
+def test_random_horizontal_flip():
+    data = load()
+    t = T.RandomHorizontalFlip(p=1.0)
+    image, bboxes, labels = t(data)
+    save(image, bboxes, labels, 'hflip')

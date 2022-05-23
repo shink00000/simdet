@@ -104,6 +104,7 @@ class RandomExpand(nn.Module):
         image, bboxes, labels = data
 
         if random() < self.p:
+            bboxes = bboxes.clone()
             h, w = image.shape[1:]
             scale = uniform(*self.scale_range)
             sh, sw = int(h * scale), int(w * scale)
@@ -114,7 +115,7 @@ class RandomExpand(nn.Module):
             pad_lengths = [off_w_l, off_h_t, off_w_r, off_h_b]
             image = F.pad(image, pad_lengths)
             bboxes[:, [0, 2]] += pad_lengths[0]
-            bboxes[:, [1, 3]] += pad_lengths[2]
+            bboxes[:, [1, 3]] += pad_lengths[1]
 
         return (image, bboxes, labels)
 
@@ -150,6 +151,7 @@ class RandomMinIoUCrop(nn.Module):
             if len(crop_regions) > 0:
                 l, t, r, b = crop_regions[0]
                 image = image[:, t:b, l:r]
+                bboxes = bboxes.clone()
                 bboxes[:, [0, 2]] -= l
                 bboxes[:, [1, 3]] -= t
                 bboxes[:, [0, 2]] = bboxes[:, [0, 2]].clip(min=0, max=r-l)

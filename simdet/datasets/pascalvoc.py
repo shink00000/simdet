@@ -65,13 +65,13 @@ class PascalVOCDataset(Dataset):
                 T.RandomMinIoUCrop(min_ious=[0.0, 0.1, 0.3, 0.5, 0.7, 0.9], p=0.5),
                 T.Resize(size=size),
                 T.RandomHorizontalFlip(p=0.5),
-                # ENCODERS[encoder.pop('type')](**encoder)
+                ENCODERS[encoder.pop('type')](**encoder)
             )
         elif phase == 'val':
             transforms = nn.Sequential(
                 T.Normalize(mean=mean, std=std),
                 T.Resize(size=size),
-                # ENCODERS[encoder.pop('type')](**encoder)
+                ENCODERS[encoder.pop('type')](**encoder)
             )
         else:
             transforms = nn.Sequential(

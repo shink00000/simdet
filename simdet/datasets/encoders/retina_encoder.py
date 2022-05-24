@@ -5,10 +5,10 @@ from torchvision.ops import box_iou, box_convert
 
 
 class RetinaEncoder(nn.Module):
-    def __init__(self, input_size: list, feat_levels: list, iou_threshs: tuple = (0.4, 0.5)):
+    def __init__(self, input_size: list, iou_threshs: tuple = (0.4, 0.5)):
         super().__init__()
         H, W = input_size
-        strides = [2**i for i in feat_levels]
+        strides = [2**i for i in range(3, 8)]
         prior_boxes = []
         for stride in strides:
             for cy, cx in product(range(stride//2, H, stride), range(stride//2, W, stride)):

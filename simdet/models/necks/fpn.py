@@ -21,6 +21,8 @@ class FPN(nn.Module):
         self.lateral_convs = nn.ModuleList([nn.Conv2d(in_channels[i], out_channels, 1) for i in range(self.n_feats)])
         self.convs = nn.ModuleList([nn.Conv2d(out_channels, out_channels, 3, padding=1) for _ in range(self.n_feats)])
 
+        self._init_weights()
+
     def forward(self, xs: list):
         xs = deque(xs, maxlen=self.n_feats)
         for resample in self.resamples:
@@ -32,6 +34,13 @@ class FPN(nn.Module):
         outs = [self.convs[i](outs[i]) for i in range(self.n_feats)]
 
         return outs
+
+    def _init_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.xavier_uniform_(m.weight, gain=1.0)
+                if m.bias is not None:
+                    nn.init.constant_(m.bias, 0.0)
 
 
 if __name__ == '__main__':

@@ -32,7 +32,7 @@ class BBoxMeanAP(Metric):
         super().__init__()
 
         self.cocoGt = COCO(anno_path)
-        self.ph, self.pw = pred_size
+        self.h, self.w = pred_size
         self.add_state('coco_dets', default=[], dist_reduce_fx=None)
 
     def update(self, preds: tuple, metas: tuple):
@@ -43,8 +43,8 @@ class BBoxMeanAP(Metric):
             scores = pred_scores[batch_id].cpu().numpy()
             class_ids = pred_class_ids[batch_id].cpu().numpy()
             meta = metas[batch_id]
-            h_ratio = meta['height'] / self.ph
-            w_ratio = meta['width'] / self.pw
+            h_ratio = meta['height'] / self.h
+            w_ratio = meta['width'] / self.w
             dets = [{
                 'image_id': meta['image_id'],
                 'category_id': class_id,

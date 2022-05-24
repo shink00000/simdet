@@ -17,7 +17,7 @@ class PascalVOCDataset(Dataset):
                    'pottedplant', 'sheep', 'sofa', 'train', 'tvmonitor']
     N_CLASSES = 20
 
-    def __init__(self, phase: str, data_dir: str, encoder: dict, size: list):
+    def __init__(self, phase: str, data_dir: str, size: list, encoder: dict):
         self.data_list = self._get_data_list(phase, data_dir)
         self.transforms = self._get_transforms(phase, size, encoder)
 
@@ -37,7 +37,7 @@ class PascalVOCDataset(Dataset):
         data_list = []
         if phase == 'test':
             phase = 'val'
-        coco = COCO(f'{data_dir}/annotations/instances_{phase}.json')
+        coco = COCO(osp.join(data_dir, f'annotations/instances_{phase}.json'))
         for image_id in coco.getImgIds():
             annos = {'bboxes': [], 'labels': []}
             for anno in coco.imgToAnns[image_id]:

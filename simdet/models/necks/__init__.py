@@ -1,5 +1,3 @@
 from .fpn import FPN
 
-NECKS = {
-    'FPN': FPN
-}
+__all__ = ['FPN']

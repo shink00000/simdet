@@ -53,6 +53,9 @@ class SingleLabelNMS(nn.Module):
 
         return pred_bboxes, pred_scores, pred_class_ids
 
+    def extra_repr(self) -> str:
+        return f'min_score={self.min_score}, select_top={self.select_top}, nms_iou={self.nms_iou}'
+
 
 class MultiLabelNMS(SingleLabelNMS):
     def forward(self, batched_bboxes: torch.Tensor, batched_scores: torch.Tensor) -> tuple:

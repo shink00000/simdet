@@ -35,6 +35,7 @@ class Config:
             shuffle=phase == 'train',
             drop_last=phase == 'train',
             pin_memory=True,
+            collate_fn=dataset.collate_fn,
             **loader_cfg
         )
         return dataloader

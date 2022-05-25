@@ -7,7 +7,7 @@ from torchvision.ops import box_convert
 
 from .backbones import BACKBONES
 from .necks import FPN
-from .losses import SmoothL1Loss, FocalLoss
+from .losses import FocalLoss
 from .postprocesses import MultiLabelNMS
 
 
@@ -80,7 +80,7 @@ class RetinaNet(nn.Module):
         self.register_buffer('prior_boxes', torch.Tensor(prior_boxes))
 
         # loss
-        self.reg_loss = SmoothL1Loss(reduction='sum')
+        self.reg_loss = nn.SmoothL1Loss(reduction='sum')
         self.cls_loss = FocalLoss(reduction='sum')
 
         # postprocess
@@ -95,9 +95,9 @@ class RetinaNet(nn.Module):
     def parameters(self, cfg):
         base_lr = cfg['lr']
         param_groups = [
-            {'params': [], 'lr': base_lr * 0.1, 'weight_decay': 0.0},
+            {'params': [], 'lr': base_lr * 0.1 * 2, 'weight_decay': 0.0},
             {'params': [], 'lr': base_lr * 0.1},
-            {'params': [], 'weight_decay': 0.0},
+            {'params': [], 'lr': base_lr * 2, 'weight_decay': 0.0},
             {'params': []},
         ]
         for name, p in self.named_parameters():

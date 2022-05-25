@@ -12,10 +12,11 @@ def test_multi_step_lr():
     m = nn.Conv2d(3, 64, 1)
     criterion = nn.CrossEntropyLoss()
     optimizer = SGD(m.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4)
-    scheduler = MultiStepLR(optimizer, [50, 75], gamma=0.1, warmup_iterations=10)
+    scheduler = MultiStepLR(optimizer, [50, 75], gamma=0.1, warmup_epochs=10)
 
     lrs = []
     for i in range(100):
+        lrs.append(scheduler.get_last_lr()[0])
         x = torch.rand(2, 3, 64, 64)
         t = torch.randint(0, 10, (2, 64, 64))
         y = m(x)
@@ -24,7 +25,6 @@ def test_multi_step_lr():
         optimizer.step()
         optimizer.zero_grad()
         scheduler.step()
-        lrs.append(scheduler.get_last_lr()[0])
 
     plt.figure()
     plt.plot(lrs)

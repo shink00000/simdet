@@ -8,12 +8,14 @@ from torchvision.models import (
 
 
 class ResNet(nn.Module):
-    def __init__(self, depth: int, **kwargs):
+    def __init__(self, depth: int, frozen_stages: int = -1, **kwargs):
         super().__init__()
         base = self.map_to_model(depth)(pretrained=True, **kwargs)
         for name, m in base.named_children():
             if 'avgpool' in name:
                 break
+            elif not (name.startswith('layer') and int(name[-1]) > frozen_stages):
+                m.requires_grad_(False)
             setattr(self, name, m)
 
         with torch.no_grad():

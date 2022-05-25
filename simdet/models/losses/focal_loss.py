@@ -18,18 +18,14 @@ class FocalLoss(nn.Module):
 
     """
 
-    def __init__(self, alpha: float = 0.25, gamma: float = 2, reduction: str = 'mean', skip_first: bool = True):
+    def __init__(self, alpha: float = 0.25, gamma: float = 2, reduction: str = 'mean'):
         super().__init__()
         self.alpha = alpha
         self.gamma = gamma
         self.reduction = reduction
-        self.skip_first = skip_first
 
     def forward(self, input: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-        if self.skip_first:
-            target = F.one_hot(target, num_classes=input.size(-1)+1)[..., 1:].type_as(input)
-        else:
-            target = F.one_hot(target, num_classes=input.size(-1)).type_as(input)
+        target = F.one_hot(target, num_classes=input.size(-1)+1)[..., 1:].type_as(input)
         p = input.sigmoid()
         pt = (1 - p) * target + p * (1 - target)
         at = self.alpha * target + (1 - self.alpha) * (1 - target)

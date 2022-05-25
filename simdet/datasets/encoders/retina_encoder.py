@@ -31,12 +31,12 @@ class RetinaEncoder(nn.Module):
         match_ids[force_assign_ids] = torch.arange(len(bboxes))
         max_ious[force_assign_ids] = self.pos_thresh
 
-        offsets = self._bbox2delta(box_convert(bboxes, 'xyxy', 'cxcywh')[match_ids])
-        labels = labels[match_ids]
-        labels[max_ious < self.pos_thresh] = -1
-        labels[max_ious < self.neg_thresh] = 0
+        reg_targets = self._bbox2delta(box_convert(bboxes, 'xyxy', 'cxcywh')[match_ids])
+        cls_targets = labels[match_ids]
+        cls_targets[max_ious < self.pos_thresh] = -1
+        cls_targets[max_ious < self.neg_thresh] = 0
 
-        return (image, offsets, labels)
+        return (image, reg_targets, cls_targets)
 
     def _bbox2delta(self, bboxes) -> torch.Tensor:
         dcx = (bboxes[..., 0] - self.prior_boxes[..., 0]) / self.prior_boxes[..., 2] / 0.1

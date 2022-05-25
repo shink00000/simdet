@@ -33,6 +33,7 @@ def main(args):
             outputs = model(images)
             loss = model.loss(outputs, targets)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=35, norm_type=2)
             optimizer.step()
             optimizer.zero_grad()
             train_loss += loss * images.size(0)

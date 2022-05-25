@@ -49,7 +49,7 @@ class Config:
 
     def build_optimizer(self, model) -> nn.Module:
         cfg = deepcopy(self.cfg['optimizer'])
-        optimizer = OPTIMIZERS[cfg.pop('type')](model.parameters(cfg), **cfg)
+        optimizer = OPTIMIZERS[cfg.pop('type')](model.get_param_groups(cfg), **cfg)
         if hasattr(self, 'checkpoint'):
             optimizer.load_state_dict(self.checkpoint['optimizer'])
         return optimizer

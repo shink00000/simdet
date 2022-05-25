@@ -41,13 +41,3 @@ class FPN(nn.Module):
                 nn.init.xavier_uniform_(m.weight, gain=1.0)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0.0)
-
-
-if __name__ == '__main__':
-    import torch
-    m = FPN([8, 16, 32], 64)
-    xs = [torch.rand(2, 8, 128, 128), torch.rand(2, 16, 64, 64), torch.rand(2, 32, 32, 32)]
-    xs = m(xs)
-    for x in xs:
-        print(x.shape)
-    print(m)

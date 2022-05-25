@@ -1,15 +1,16 @@
-import yaml
 import os.path as osp
+from copy import deepcopy
+
+import yaml
 import torch
 import torch.nn as nn
-from copy import deepcopy
 from torch.utils.data import DataLoader
 
-from ..datasets import DATASETS
-from ..models import MODELS
-from ..optimizers import OPTIMIZERS
-from ..schedulers import SCHEDULERS
-from ..metrics.mean_ap import BBoxMeanAP
+from .datasets import DATASETS
+from .models import MODELS
+from .optimizers import OPTIMIZERS
+from .schedulers import SCHEDULERS
+from .metrics.mean_ap import BBoxMeanAP
 
 
 class Config:

@@ -1,7 +1,7 @@
 import torch
 from tqdm import tqdm
 
-from simdet.utils.config import Config
+from simdet.config import Config
 
 
 def main(args):

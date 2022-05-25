@@ -3,7 +3,7 @@ import os.path as osp
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
-from simdet.utils.config import Config
+from simdet.config import Config
 
 
 def main(args):

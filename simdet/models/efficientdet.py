@@ -21,7 +21,7 @@ class EfficientHead(nn.Module):
         for convs in [self.reg_convs, self.cls_convs]:
             for n in range(n_stacks):
                 depthwise_conv = nn.Conv2d(in_channels, in_channels, 3, padding=1, groups=in_channels)
-                pointwise_conv = nn.Conv2d(in_channels, in_channels, 1)
+                pointwise_conv = nn.Conv2d(in_channels, in_channels, 1, bias=False)
                 act = nn.SiLU(inplace=True)
                 for i in range(self.n_feats):
                     bn = nn.BatchNorm2d(in_channels)

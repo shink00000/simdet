@@ -11,7 +11,7 @@ dataset:
 
 model:
   type: EfficientDet
-  size: d0
+  size: d2
   backbone:
     frozen_stages: 2
   input_size: *size

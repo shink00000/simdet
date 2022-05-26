@@ -1,6 +1,5 @@
 from collections import deque
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class FPN(nn.Module):
@@ -19,18 +18,21 @@ class FPN(nn.Module):
             self.resamples.append(m)
             in_channels.append(out_channels)
         self.lateral_convs = nn.ModuleList([nn.Conv2d(in_channels[i], out_channels, 1) for i in range(self.n_feats)])
+        self.up = nn.Upsample(scale_factor=2, mode='nearest')
         self.convs = nn.ModuleList([nn.Conv2d(out_channels, out_channels, 3, padding=1) for _ in range(self.n_feats)])
 
         self._init_weights()
 
-    def forward(self, xs: list):
+    def forward(self, xs: list) -> list:
+        # resample
         xs = deque(xs, maxlen=self.n_feats)
         for resample in self.resamples:
             xs.append(resample(xs[-1]))
 
+        # fpn
         outs = [self.lateral_convs[i](xs[i]) for i in range(self.n_feats)]
         for i in range(self.n_feats-2, -1, -1):
-            outs[i] = outs[i] + F.interpolate(outs[i+1], scale_factor=2, mode='nearest')
+            outs[i] = outs[i] + self.up(outs[i+1])
         outs = [self.convs[i](outs[i]) for i in range(self.n_feats)]
 
         return outs

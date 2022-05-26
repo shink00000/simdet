@@ -1,5 +1,8 @@
-from .resnet import ResNet
+from .efficientnet import EfficientNet
+from .resnet import ResNet, ResNeXt
 
 BACKBONES = {
-    'ResNet': ResNet
+    'EfficientNet': EfficientNet,
+    'ResNet': ResNet,
+    'ResNeXt': ResNeXt
 }

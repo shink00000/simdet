@@ -16,6 +16,10 @@ class ResNet(nn.Module):
                 break
             elif not (name.startswith('layer') and int(name[-1]) > frozen_stages):
                 m.requires_grad_(False)
+            else:
+                for m_ in m.modules():
+                    if isinstance(m_, nn.BatchNorm2d):
+                        m_.requires_grad_(False)
             setattr(self, name, m)
 
         with torch.no_grad():
@@ -38,6 +42,12 @@ class ResNet(nn.Module):
             18: resnet18,
             50: resnet50,
         }[depth]
+
+    def train(self, mode=True):
+        super().train(mode)
+        for m in self.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.eval()
 
 
 class ResNeXt(ResNet):

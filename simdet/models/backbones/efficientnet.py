@@ -21,7 +21,9 @@ class EfficientNet(nn.Module):
             if i <= frozen_stages:
                 m.requires_grad_(False)
             else:
-                break
+                for m_ in m.modules():
+                    if isinstance(m_, nn.BatchNorm2d):
+                        m_.requires_grad_(False)
 
         with torch.no_grad():
             x = torch.rand(2, 3, 32, 32)
@@ -49,3 +51,9 @@ class EfficientNet(nn.Module):
             'b6': efficientnet_b6,
             'b7': efficientnet_b7,
         }[size]
+
+    def train(self, mode=True):
+        super().train(mode)
+        for m in self.modules():
+            if isinstance(m, nn.BatchNorm2d):
+                m.eval()

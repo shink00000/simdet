@@ -185,12 +185,12 @@ class ShiftedWindowMSA(WindowMSA):
             mask = mask - mask.transpose(1, 2)
             mask = mask.masked_fill(mask != 0, float('-inf')).masked_fill(mask == 0, float(0.0))
             self.register_buffer('mask', mask)  # (nW, window_size**2, window_size**2)
-        mask = self.mask
+        mask = self.mask.unsqueeze(1)
 
         x = self.cyclic_shift(x, h, w, -self.shift_size)
         x = self.window_partition(x, h, w, self.window_size)  # (N*nW, window_size**2, C)
         nw = x.size(0) // n
-        attn_mask = bias.repeat(n * nw, 1, 1) + mask.repeat(n * self.n_heads, 1, 1)
+        attn_mask = bias.repeat(n * nw, 1, 1) + mask.repeat(n, self.n_heads, 1, 1).flatten(0, 1)
         x = self.attn(x, x, x, attn_mask=attn_mask, need_weights=False)[0]
         x = self.window_reverse(x, h, w, self.window_size)  # (N, L, C)
         x = self.cyclic_shift(x, h, w, self.shift_size)

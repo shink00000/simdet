@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..layers import nlc_to_nchw, nchw_to_nlc, DropPath, MultiheadAttention
+from ..layers import nlc_to_nchw, nchw_to_nlc, DropPath
 
 
 class PatchEmbeding(nn.Module):
@@ -49,8 +49,9 @@ class PatchMerging(nn.Module):
 class WindowMSA(nn.Module):
     def __init__(self, embed_dim, n_heads, drop_path_rate, window_size):
         super().__init__()
-        self.attn = MultiheadAttention(embed_dim, n_heads)
+        self.attn = nn.MultiheadAttention(embed_dim, n_heads, batch_first=True)
         self.drop_path = DropPath(drop_path_rate)
+        self.n_heads = n_heads
         self.window_size = window_size
 
         self.rel_pos_bias_table = nn.Parameter(
@@ -71,13 +72,16 @@ class WindowMSA(nn.Module):
         Returns:
             torch.Tensor: (N, L, C)
         """
+        n = x.size(0)
 
         bias = self.rel_pos_bias_table.view(-1, (2*self.window_size-1)**2)[
             :, self.rel_pos_index
-        ].unsqueeze(0)  # (1, nH, window_size**2, window_size**2)
+        ]  # (nH, window_size**2, window_size**2)
 
         x = self.window_partition(x, h, w, self.window_size)  # (N*nW, window_size**2, C)
-        x = self.attn(x, x, x, b=bias)
+        nw = x.size(0) // n
+        attn_mask = bias.repeat(n * nw, 1, 1)
+        x = self.attn(x, x, x, attn_mask=attn_mask, need_weights=False)[0]
         x = self.window_reverse(x, h, w, self.window_size)  # (N, L, C)
 
         out = x0 + self.drop_path(x)
@@ -161,11 +165,11 @@ class ShiftedWindowMSA(WindowMSA):
         Returns:
             torch.Tensor: (N, L, C)
         """
+        n = x.size(0)
 
-        bias = self.rel_pos_bias_table[
-            self.rel_pos_index.view(-1)
-        ].view(self.window_size**2, self.window_size**2, -1)  # (window_size**2, window_size**2, nH)
-        bias = bias.permute(2, 0, 1).contiguous().unsqueeze(0)  # (1, nH, window_size**2, window_size**2)
+        bias = self.rel_pos_bias_table.view(-1, (2*self.window_size-1)**2)[
+            :, self.rel_pos_index
+        ]  # (nH, window_size**2, window_size**2)
 
         if not hasattr(self, 'mask'):
             mask = torch.zeros((1, h, w, 1), device=x.device)
@@ -185,7 +189,9 @@ class ShiftedWindowMSA(WindowMSA):
 
         x = self.cyclic_shift(x, h, w, -self.shift_size)
         x = self.window_partition(x, h, w, self.window_size)  # (N*nW, window_size**2, C)
-        x = self.attn(x, x, x, b=bias, mask=mask)
+        nw = x.size(0) // n
+        attn_mask = bias.repeat(n * nw, 1, 1) + mask.repeat(n * self.n_heads, 1, 1)
+        x = self.attn(x, x, x, attn_mask=attn_mask, need_weights=False)[0]
         x = self.window_reverse(x, h, w, self.window_size)  # (N, L, C)
         x = self.cyclic_shift(x, h, w, self.shift_size)
 

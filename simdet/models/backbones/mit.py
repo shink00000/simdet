@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ..layers import nlc_to_nchw, nchw_to_nlc, DropPath, MultiheadAttention
+from ..layers import nlc_to_nchw, nchw_to_nlc, DropPath
 
 
 class OverlapPatchEmbeding(nn.Module):
@@ -28,7 +28,7 @@ class OverlapPatchEmbeding(nn.Module):
 class EfficientSelfAttention(nn.Module):
     def __init__(self, embed_dim, n_heads, reduce_ratio, drop_path_rate):
         super().__init__()
-        self.attn = MultiheadAttention(embed_dim, n_heads)
+        self.attn = nn.MultiheadAttention(embed_dim, n_heads, batch_first=True)
         if reduce_ratio > 1:
             self.reduction = nn.Conv2d(embed_dim, embed_dim, reduce_ratio, stride=reduce_ratio)
             self.norm = nn.LayerNorm(embed_dim, eps=1e-6)
@@ -45,7 +45,7 @@ class EfficientSelfAttention(nn.Module):
         else:
             x_kv = x
 
-        x = self.attn(x_q, x_kv, x_kv)
+        x = self.attn(x_q, x_kv, x_kv, need_weights=False)[0]
         out = x0 + self.drop_path(x)
 
         return out

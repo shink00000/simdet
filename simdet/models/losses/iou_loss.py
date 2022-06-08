@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from torchvision.ops import box_iou
+from torchvision.ops import box_iou, generalized_box_iou
 
 
 class IoULoss(nn.Module):
@@ -68,3 +68,20 @@ class IoULossWithDistance(nn.Module):
 
     def _calc_area(self, t):
         return (t[..., 0] + t[..., 2]) * (t[..., 1] + t[..., 3])
+
+
+class GIoULoss(nn.Module):
+    def __init__(self, reduction: str = 'mean'):
+        super().__init__()
+        self.reduction = reduction
+
+    def forward(self, input: torch.Tensor, target: torch.Tensor):
+        iou = generalized_box_iou(input, target).diagonal()
+        loss = 1 - iou
+
+        if self.reduction == 'mean':
+            return loss.mean()
+        elif self.reduction == 'sum':
+            return loss.sum()
+        else:
+            return loss

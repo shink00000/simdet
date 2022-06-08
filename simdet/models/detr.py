@@ -1,9 +1,10 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torchvision.ops.boxes import generalized_box_iou, box_convert
 from scipy.optimize import linear_sum_assignment
 
-from .layers import nchw_to_nlc, DropPath
+from .layers import nchw_to_nlc
 from .backbones import BACKBONES
 from .losses import GIoULoss
 
@@ -12,7 +13,7 @@ class MHA(nn.Module):
     def __init__(self, embed_dim, n_heads, drop_rate):
         super().__init__()
         self.attn = nn.MultiheadAttention(embed_dim, n_heads, batch_first=True)
-        self.drop_path = DropPath(drop_rate)
+        self.drop_path = nn.Dropout(drop_rate)
 
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, x0: torch.Tensor = None) -> torch.Tensor:
         if x0 is None:
@@ -30,7 +31,7 @@ class FFN(nn.Module):
         self.fc1 = nn.Linear(embed_dim, hidden_dim)
         self.act = nn.ReLU(inplace=True)
         self.fc2 = nn.Linear(hidden_dim, embed_dim)
-        self.drop_path = DropPath(drop_rate)
+        self.drop_path = nn.Dropout(drop_rate)
 
     def forward(self, x: torch.Tensor, x0: torch.Tensor = None) -> torch.Tensor:
         if x0 is None:
@@ -77,23 +78,20 @@ class DETREncoder(nn.Module):
 
 
 class DETRDecoderLayer(nn.Module):
-    def __init__(self, embed_dim, n_heads, drop_rate, apply_msa=True):
+    def __init__(self, embed_dim, n_heads, drop_rate):
         super().__init__()
-        self.apply_msa = apply_msa
-        if apply_msa:
-            self.attn1 = MHA(embed_dim, n_heads, drop_rate)
-            self.norm1 = nn.LayerNorm(embed_dim)
+        self.attn1 = MHA(embed_dim, n_heads, drop_rate)
+        self.norm1 = nn.LayerNorm(embed_dim)
         self.attn2 = MHA(embed_dim, n_heads, drop_rate)
         self.norm2 = nn.LayerNorm(embed_dim)
         self.ffn = FFN(embed_dim, drop_rate)
         self.norm3 = nn.LayerNorm(embed_dim)
 
     def forward(self, y: torch.Tensor, x: torch.Tensor, pe: torch.Tensor, obj: torch.Tensor) -> torch.Tensor:
-        if self.apply_msa:
-            q = k = y + obj
-            v = y
-            y = self.attn1(q, k, v, x0=y)
-            y = self.norm1(y)
+        q = k = y + obj
+        v = y
+        y = self.attn1(q, k, v, x0=y)
+        y = self.norm1(y)
 
         q = y + obj
         k = x + pe
@@ -110,15 +108,15 @@ class DETRDecoderLayer(nn.Module):
 class DETRDecoder(nn.Module):
     def __init__(self, n_objs, n_layers, embed_dim, n_heads, drop_rates):
         super().__init__()
-        self.obj = nn.Parameter(torch.randn((n_objs, embed_dim)))
+        self.query_embedding = nn.Embedding(n_objs, embed_dim)
         self.layers = nn.ModuleList([
-            DETRDecoderLayer(embed_dim, n_heads, drop_rates[i], apply_msa=i > 0)
+            DETRDecoderLayer(embed_dim, n_heads, drop_rates[i])
             for i in range(n_layers)
         ])
 
     def forward(self, x: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
         outs = []
-        object_queries = self.obj.unsqueeze(0).repeat(x.size(0), 1, 1)
+        object_queries = self.query_embedding.weight.unsqueeze(0).repeat(x.size(0), 1, 1)
         y = torch.zeros_like(object_queries)
         for layer in self.layers:
             y = layer(y, x, pe, object_queries)
@@ -134,7 +132,8 @@ class DETRHead(nn.Module):
         embed_dim = 256
         pos_dim = embed_dim // 2
         n_heads = 8
-        dprs = torch.linspace(0, 0.1, n_encoders + n_decoders).tolist()
+        # dprs = torch.linspace(0, 0.1, n_encoders + n_decoders).tolist()
+        dprs = [0.1] * (n_encoders + n_decoders)
 
         self.projection = nn.Conv2d(in_channels, embed_dim, 1)
         self.dim_t = 10000 ** (2 * torch.div(torch.arange(pos_dim), 2, rounding_mode='trunc') / pos_dim)
@@ -179,21 +178,14 @@ class DETRHead(nn.Module):
         pos_y = y_embed[..., None] / self.dim_t
         pos_x = torch.stack((pos_x[..., 0::2].sin(), pos_x[..., 1::2].cos()), dim=-1).flatten(-2)
         pos_y = torch.stack((pos_y[..., 0::2].sin(), pos_y[..., 1::2].cos()), dim=-1).flatten(-2)
-        pos = torch.cat((pos_y, pos_x), dim=-1).permute(2, 0, 1)
+        pos = torch.cat((pos_y, pos_x), dim=-1).permute(2, 0, 1).to(x.device)
 
         return pos
 
     def _init_weights(self):
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                nn.init.trunc_normal_(m.weight, std=0.02)
-                nn.init.constant_(m.bias, 0.0)
-            elif isinstance(m, nn.Conv2d):
-                fan_out = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                fan_out //= m.groups
-                nn.init.normal_(m.weight, mean=0, std=pow(1.0 / fan_out, 0.5))
-                if m.bias is not None:
-                    nn.init.constant_(m.bias, 0.0)
+                nn.init.xavier_uniform_(m.weight)
 
 
 class DETR(nn.Module):
@@ -220,17 +212,15 @@ class DETR(nn.Module):
     def get_param_groups(self, cfg):
         base_lr = cfg['lr']
         param_groups = [
-            {'params': [], 'lr': base_lr * 0.1 * 2, 'weight_decay': 0.0},
             {'params': [], 'lr': base_lr * 0.1},
-            {'params': [], 'lr': base_lr * 2, 'weight_decay': 0.0},
-            {'params': []},
+            {'params': [], 'lr': base_lr},
         ]
         for name, p in self.named_parameters():
             if p.requires_grad:
                 if 'backbone' in name:
-                    no = 0 if p.ndim == 1 else 1
+                    no = 0
                 else:
-                    no = 2 if p.ndim == 1 else 3
+                    no = 1
                 param_groups[no]['params'].append(p)
 
         return param_groups
@@ -288,7 +278,7 @@ class DETR(nn.Module):
         bboxes = self._to_xyxy(reg_outs[-1])
         bboxes[..., 0::2] *= self.W
         bboxes[..., 1::2] *= self.H
-        scores, class_ids = cls_outs[-1].max(dim=-1)
+        scores, class_ids = F.softmax(cls_outs[-1], dim=-1).max(dim=-1)
         return bboxes, scores, class_ids
 
     @staticmethod

@@ -15,6 +15,7 @@ model:
     depth: 50
     frozen_stages: 1
   input_size: *size
+  n_objs: 40
 
 optimizer:
   type: AdamW

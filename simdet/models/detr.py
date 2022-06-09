@@ -86,13 +86,13 @@ class DETRDecoderLayer(nn.Module):
         self.ffn = FFN(embed_dim, drop_rate)
         self.norm3 = nn.LayerNorm(embed_dim)
 
-    def forward(self, y: torch.Tensor, x: torch.Tensor, pe: torch.Tensor, obj: torch.Tensor) -> torch.Tensor:
-        q = k = y + obj
+    def forward(self, y: torch.Tensor, x: torch.Tensor, pe: torch.Tensor, object_query: torch.Tensor) -> torch.Tensor:
+        q = k = y + object_query
         v = y
         y = self.attn1(q, k, v, x0=y)
         y = self.norm1(y)
 
-        q = y + obj
+        q = y + object_query
         k = x + pe
         v = x
         y = self.attn2(q, k, v, x0=y)
@@ -107,15 +107,17 @@ class DETRDecoderLayer(nn.Module):
 class DETRDecoder(nn.Module):
     def __init__(self, n_objs, n_layers, embed_dim, n_heads, drop_rates):
         super().__init__()
-        self.obj = nn.init.normal(nn.Parameter(torch.zeros(n_objs, embed_dim)))
+        self.object_query = nn.Parameter(torch.zeros(n_objs, embed_dim))
         self.layers = nn.ModuleList([
             DETRDecoderLayer(embed_dim, n_heads, drop_rates[i])
             for i in range(n_layers)
         ])
 
+        nn.init.normal_(self.object_query)
+
     def forward(self, x: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
         outs = []
-        object_queries = self.obj.unsqueeze(0).repeat(x.size(0), 1, 1)
+        object_queries = self.object_query.unsqueeze(0).repeat(x.size(0), 1, 1)
         y = torch.zeros_like(object_queries)
         for layer in self.layers:
             y = layer(y, x, pe, object_queries)

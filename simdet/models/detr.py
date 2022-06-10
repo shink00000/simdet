@@ -6,6 +6,7 @@ from scipy.optimize import linear_sum_assignment
 from .layers import nchw_to_nlc, DropPath
 from .backbones import BACKBONES
 from .losses import GIoULoss, FocalLoss
+from .postprocesses import SimpleCutOff
 
 
 class MHA(nn.Module):
@@ -205,6 +206,9 @@ class DETR(nn.Module):
         self.iou_loss = GIoULoss(reduction='mean')
         self.cls_loss = FocalLoss(reduction='sum')
 
+        # postprocess
+        self.postprocess = SimpleCutOff()
+
     def forward(self, x):
         x = self.backbone(x)
         outs = self.head(x)
@@ -281,7 +285,8 @@ class DETR(nn.Module):
         bboxes = self._to_xyxy(reg_outs[-1])
         bboxes[..., 0::2] *= self.W
         bboxes[..., 1::2] *= self.H
-        scores, class_ids = cls_outs[-1].sigmoid().max(dim=-1)
+        scores = cls_outs[-1].sigmoid()
+        bboxes, scores, class_ids = self.postprocess(bboxes, scores)
         return bboxes, scores, class_ids
 
     @staticmethod

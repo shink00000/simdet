@@ -205,7 +205,7 @@ class DETR(nn.Module):
         self.lmd_iou = lmd_iou
 
         # loss
-        self.reg_loss = nn.SmoothL1Loss(reduction='mean')
+        self.reg_loss = nn.SmoothL1Loss(reduction='sum')
         self.iou_loss = GIoULoss(reduction='mean')
         self.cls_loss = FocalLoss(reduction='sum')
 
@@ -277,7 +277,7 @@ class DETR(nn.Module):
 
         if N > 0:
             cls_loss = self.cls_loss(cls_outs, cls_targets) / N
-            reg_loss = self.reg_loss(reg_outs, reg_targets)
+            reg_loss = self.reg_loss(reg_outs, reg_targets) / N
             iou_loss = self.iou_loss(self._to_xyxy(reg_outs), self._to_xyxy(reg_targets))
             loss = cls_loss + self.lmd_l1 * reg_loss + self.lmd_iou * iou_loss
         else:

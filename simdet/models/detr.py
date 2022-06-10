@@ -256,7 +256,7 @@ class DETR(nn.Module):
             reg_target = reg_targets[i][:pos_targets[i]]
             cls_target = cls_targets[i][:pos_targets[i]]
             cost = -cls_out[:, cls_target-1]
-            cost += self.lmd_l1 * torch.dist(reg_out, reg_target, p=1)
+            cost += self.lmd_l1 * torch.cdist(reg_out, reg_target, p=1)
             cost += self.lmd_iou * (1 - generalized_box_iou(self._to_xyxy(reg_out), self._to_xyxy(reg_target)))
 
             row_ind, col_ind = linear_sum_assignment(cost.cpu())

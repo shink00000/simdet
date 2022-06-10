@@ -192,7 +192,7 @@ class DETRHead(nn.Module):
 
 class DETR(nn.Module):
     def __init__(self, backbone: dict, n_classes: int, input_size: list, n_objs: int = 100,
-                 lmd_iou: int = 1):
+                 lmd_l1: int = 1, lmd_iou: int = 1):
         super().__init__()
 
         # layers
@@ -201,9 +201,11 @@ class DETR(nn.Module):
 
         # property
         self.H, self.W = input_size
+        self.lmd_l1 = lmd_l1
         self.lmd_iou = lmd_iou
 
         # loss
+        self.reg_loss = nn.SmoothL1Loss(reduction='mean')
         self.iou_loss = GIoULoss(reduction='mean')
         self.cls_loss = FocalLoss(reduction='sum')
 
@@ -254,6 +256,7 @@ class DETR(nn.Module):
             reg_target = reg_targets[i][:pos_targets[i]]
             cls_target = cls_targets[i][:pos_targets[i]]
             cost = -cls_out[:, cls_target-1]
+            cost += self.lmd_l1 * torch.dist(reg_out, reg_target, p=1)
             cost += self.lmd_iou * (1 - generalized_box_iou(self._to_xyxy(reg_out), self._to_xyxy(reg_target)))
 
             row_ind, col_ind = linear_sum_assignment(cost.cpu())
@@ -274,8 +277,9 @@ class DETR(nn.Module):
 
         if N > 0:
             cls_loss = self.cls_loss(cls_outs, cls_targets) / N
+            reg_loss = self.reg_loss(reg_outs, reg_targets)
             iou_loss = self.iou_loss(self._to_xyxy(reg_outs), self._to_xyxy(reg_targets))
-            loss = cls_loss + self.lmd_iou * iou_loss
+            loss = cls_loss + self.lmd_l1 * reg_loss + self.lmd_iou * iou_loss
         else:
             loss = self.cls_loss(cls_outs[neg_mask], cls_targets[neg_mask])
 

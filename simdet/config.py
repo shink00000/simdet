@@ -45,7 +45,7 @@ class Config:
         cfg = deepcopy(self.cfg['model'])
         model = MODELS[cfg.pop('type')](**{**cfg, 'n_classes': self.n_classes})
         if hasattr(self, 'checkpoint'):
-            model.load_state_dict(self.checkpoint['model'])
+            model.load_state_dict(self.checkpoint['model'], strict=False)
         return model
 
     def build_optimizer(self, model) -> nn.Module:

@@ -6,7 +6,7 @@ from scipy.optimize import linear_sum_assignment
 from .layers import nchw_to_nlc, DropPath
 from .backbones import BACKBONES
 from .losses import GIoULoss, FocalLoss
-from .postprocesses import SimpleCutOff
+from .postprocesses import MultiLabelBasicProcess
 
 
 class MHA(nn.Module):
@@ -113,6 +113,7 @@ class DETRDecoder(nn.Module):
             DETRDecoderLayer(embed_dim, n_heads, drop_rates[i])
             for i in range(n_layers)
         ])
+        self.norm = nn.LayerNorm(embed_dim)
 
         nn.init.normal_(self.object_query)
 
@@ -122,7 +123,7 @@ class DETRDecoder(nn.Module):
         y = torch.zeros_like(object_queries)
         for layer in self.layers:
             y = layer(y, x, pe, object_queries)
-            outs.append(y)
+            outs.append(self.norm(y))
         outs = torch.stack(outs)
 
         return outs
@@ -207,7 +208,7 @@ class DETR(nn.Module):
         self.cls_loss = FocalLoss(reduction='sum')
 
         # postprocess
-        self.postprocess = SimpleCutOff()
+        self.postprocess = MultiLabelBasicProcess()
 
     def forward(self, x):
         x = self.backbone(x)

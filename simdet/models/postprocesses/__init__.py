@@ -1,4 +1,4 @@
 from .nms import SingleLabelNMS, MultiLabelNMS
-from .simple_cutoff import SimpleCutOff
+from .basic_process import SingleLabelBasicProcess, MultiLabelBasicProcess
 
-__all__ = ['SingleLabelNMS', 'MultiLabelNMS', 'SimpleCutOff']
+__all__ = ['SingleLabelNMS', 'MultiLabelNMS', 'SingleLabelBasicProcess', 'MultiLabelBasicProcess']

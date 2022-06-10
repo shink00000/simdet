@@ -33,4 +33,5 @@ metric:
   pred_size: *size
 
 runtime:
+  clip_norm: 0.1
   epochs: 140

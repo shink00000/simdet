@@ -153,6 +153,7 @@ class ShiftedWindowMSA(WindowMSA):
     def __init__(self, embed_dim, n_heads, drop_path_rate, window_size, shift_size):
         super().__init__(embed_dim, n_heads, drop_path_rate, window_size)
         self.shift_size = shift_size
+        self.mask = None
 
     def forward(self, x: torch.Tensor, x0: torch.Tensor, h: int, w: int) -> torch.Tensor:
         """
@@ -171,7 +172,7 @@ class ShiftedWindowMSA(WindowMSA):
             :, self.rel_pos_index
         ]  # (nH, window_size**2, window_size**2)
 
-        if not hasattr(self, 'mask'):
+        if self.mask is None:
             mask = torch.zeros((1, h, w, 1), device=x.device)
             h_slices = (slice(0, -self.window_size), slice(-self.window_size, -self.shift_size), slice(-self.shift_size, None))
             w_slices = (slice(0, -self.window_size), slice(-self.window_size, -self.shift_size), slice(-self.shift_size, None))
@@ -184,7 +185,7 @@ class ShiftedWindowMSA(WindowMSA):
             mask = self.window_partition(mask, h, w, self.window_size)
             mask = mask - mask.transpose(1, 2)
             mask = mask.masked_fill(mask != 0, float('-inf')).masked_fill(mask == 0, float(0.0))
-            self.register_buffer('mask', mask)  # (nW, window_size**2, window_size**2)
+            self.mask = mask  # (nW, window_size**2, window_size**2)
         mask = self.mask.unsqueeze(1)
 
         x = self.cyclic_shift(x, h, w, -self.shift_size)

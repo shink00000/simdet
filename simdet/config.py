@@ -22,6 +22,7 @@ class Config:
         else:
             self.start_epoch = 1
         self.epochs = self.cfg['runtime']['epochs']
+        self.clip_norm = self.cfg['runtime'].get('clip_norm', 35)
 
     def build_dataloader(self, phase: str) -> DataLoader:
         cfg = deepcopy(self.cfg['dataset'])
@@ -45,7 +46,7 @@ class Config:
         cfg = deepcopy(self.cfg['model'])
         model = MODELS[cfg.pop('type')](**{**cfg, 'n_classes': self.n_classes})
         if hasattr(self, 'checkpoint'):
-            model.load_state_dict(self.checkpoint['model'], strict=False)
+            model.load_state_dict(self.checkpoint['model'])
         return model
 
     def build_optimizer(self, model) -> nn.Module:

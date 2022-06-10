@@ -138,6 +138,7 @@ class DETRHead(nn.Module):
         dprs = torch.linspace(0, 0.1, n_encoders + n_decoders).tolist()
 
         self.projection = nn.Conv2d(in_channels, embed_dim, 1)
+        self.pe = None
         self.dim_t = 10000 ** (2 * torch.div(torch.arange(pos_dim), 2, rounding_mode='trunc') / pos_dim)
         self.encoder = DETREncoder(n_encoders, embed_dim, n_heads, dprs[:n_encoders])
         self.decoder = DETRDecoder(n_objs, n_decoders, embed_dim, n_heads, dprs[n_encoders:])
@@ -155,8 +156,8 @@ class DETRHead(nn.Module):
 
     def forward(self, xs: list):
         x = self.projection(xs[-1])
-        if not hasattr(self, 'pe'):
-            self.register_buffer('pe', self._pos_encoder(x))
+        if self.pe is None:
+            self.pe = self._pos_encoder(x)
         x = nchw_to_nlc(x)
         pe = nchw_to_nlc(self.pe.unsqueeze(0))
         x = self.encoder(x, pe)

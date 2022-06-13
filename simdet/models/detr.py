@@ -252,8 +252,8 @@ class DETR(nn.Module):
         reg_outs_, reg_targets_ = [], []
         cls_outs_, cls_targets_ = [], []
         for i in range(reg_outs.size(0)):
-            reg_out = reg_outs[i].detach().clone()
-            cls_out = cls_outs[i].detach().clone()
+            reg_out = reg_outs[i].detach()
+            cls_out = cls_outs[i].detach()
             reg_target = reg_targets[i][:pos_targets[i]]
             cls_target = cls_targets[i][:pos_targets[i]]
             cost = -cls_out[:, cls_target-1]

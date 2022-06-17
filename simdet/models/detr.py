@@ -147,8 +147,7 @@ class DETRHead(nn.Module):
             nn.ReLU(inplace=True),
             nn.Linear(embed_dim, embed_dim),
             nn.ReLU(inplace=True),
-            nn.Linear(embed_dim, 4),
-            nn.Sigmoid()
+            nn.Linear(embed_dim, 4)
         )
         self.cls_top = nn.Linear(embed_dim, n_classes)
 
@@ -162,7 +161,7 @@ class DETRHead(nn.Module):
         pe = nchw_to_nlc(self.pe.unsqueeze(0))
         x = self.encoder(x, pe)
         x = self.decoder(x, pe)
-        reg_outs = self.reg_top(x)
+        reg_outs = self.reg_top(x).sigmoid()
         cls_outs = self.cls_top(x)
 
         return reg_outs, cls_outs
@@ -287,11 +286,11 @@ class DETR(nn.Module):
         return loss
 
     def predict(self, outputs: tuple) -> tuple:
-        reg_outs, cls_outs = outputs
-        bboxes = self._to_xyxy(reg_outs[-1])
+        reg_outs, cls_outs = [output[-1] for output in outputs]
+        bboxes = self._to_xyxy(reg_outs)
         bboxes[..., 0::2] *= self.W
         bboxes[..., 1::2] *= self.H
-        scores = cls_outs[-1].sigmoid()
+        scores = cls_outs.sigmoid()
         bboxes, scores, class_ids = self.postprocess(bboxes, scores)
         return bboxes, scores, class_ids
 

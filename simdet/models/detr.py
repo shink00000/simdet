@@ -80,9 +80,9 @@ class DETREncoder(nn.Module):
 class DETRDecoderLayer(nn.Module):
     def __init__(self, embed_dim, n_heads, drop_rate):
         super().__init__()
-        self.attn1 = MHA(embed_dim, n_heads, drop_rate)
+        self.self_attn = MHA(embed_dim, n_heads, drop_rate)
         self.norm1 = nn.LayerNorm(embed_dim)
-        self.attn2 = MHA(embed_dim, n_heads, drop_rate)
+        self.cross_attn = MHA(embed_dim, n_heads, drop_rate)
         self.norm2 = nn.LayerNorm(embed_dim)
         self.ffn = FFN(embed_dim, drop_rate)
         self.norm3 = nn.LayerNorm(embed_dim)
@@ -90,13 +90,13 @@ class DETRDecoderLayer(nn.Module):
     def forward(self, y: torch.Tensor, x: torch.Tensor, pe: torch.Tensor, object_query: torch.Tensor) -> torch.Tensor:
         q = k = y + object_query
         v = y
-        y = self.attn1(q, k, v, x0=y)
+        y = self.self_attn(q, k, v, x0=y)
         y = self.norm1(y)
 
         q = y + object_query
         k = x + pe
         v = x
-        y = self.attn2(q, k, v, x0=y)
+        y = self.cross_attn(q, k, v, x0=y)
         y = self.norm2(y)
 
         y = self.ffn(y)

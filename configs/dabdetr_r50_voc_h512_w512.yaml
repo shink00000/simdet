@@ -1,0 +1,37 @@
+dataset:
+  type: PascalVOCDataset
+  data_dir: ./data/voc07+12
+  size: &size [512, 512]
+  encoder:
+    type: DETREncoder
+  loader:
+    batch_size: 16
+    num_workers: 2
+
+model:
+  type: DABDETR
+  backbone:
+    type: ResNet
+    depth: 50
+    frozen_stages: 1
+  input_size: *size
+  n_objs: 40
+
+optimizer:
+  type: AdamW
+  lr: 0.0001
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+
+scheduler:
+  type: MultiStepLR
+  milestones: [100]
+  gamma: 0.1
+
+metric:
+  anno_path: ./data/voc07+12/annotations/instances_val.json
+  pred_size: *size
+
+runtime:
+  clip_norm: 0.1
+  epochs: 140

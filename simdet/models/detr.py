@@ -10,15 +10,19 @@ from .postprocesses import MultiLabelBasicProcess
 
 
 class MHA(nn.Module):
-    def __init__(self, embed_dim, n_heads, drop_rate):
+    def __init__(self, embed_dim, n_heads, drop_rate, kdim=None, vdim=None):
         super().__init__()
-        self.attn = nn.MultiheadAttention(embed_dim, n_heads, batch_first=True)
+        self.attn = nn.MultiheadAttention(embed_dim, n_heads, batch_first=True, kdim=kdim, vdim=vdim)
+        if vdim is not None and embed_dim != vdim:
+            self.proj = nn.Linear(embed_dim, vdim)
         self.drop_path = DropPath(drop_rate)
 
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, x0: torch.Tensor = None) -> torch.Tensor:
         if x0 is None:
             x0 = q
         x = self.attn(q, k, v, need_weights=False)[0]
+        if hasattr(self, 'proj'):
+            x = self.proj(x)
         out = x0 + self.drop_path(x)
 
         return out
@@ -53,6 +57,13 @@ class SineEncoding(nn.Module):
         self.register_buffer('dim_t', dim_t)
 
     def forward(self, pos: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            pos (torch.Tensor): (N, L, n_dim)
+
+        Returns:
+            torch.Tensor: (N, L, n_dim)
+        """
         assert pos.size(-1) == self.n_dim
         pe = []
         for i in range(self.n_dim):

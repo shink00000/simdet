@@ -54,14 +54,14 @@ class SineEncoding(nn.Module):
 
     def forward(self, pos: torch.Tensor) -> torch.Tensor:
         assert pos.size(-1) == self.n_dim
-        new_pos = []
+        pe = []
         for i in range(self.n_dim):
             p = 2 * torch.pi * pos[..., i, None] / self.dim_t
             p = torch.stack((p[..., 0::2].sin(), p[..., 1::2].cos()), dim=-1).flatten(-2)
-            new_pos.append(p)
-        new_pos = torch.cat(new_pos, dim=-1)
+            pe.append(p)
+        pe = torch.cat(pe, dim=-1)
 
-        return new_pos
+        return pe
 
 
 class DETREncoderLayer(nn.Module):
@@ -72,8 +72,8 @@ class DETREncoderLayer(nn.Module):
         self.ffn = FFN(embed_dim, drop_rate)
         self.norm2 = nn.LayerNorm(embed_dim)
 
-    def forward(self, x: torch.Tensor, pos: torch.Tensor) -> torch.Tensor:
-        q = k = x + pos
+    def forward(self, x: torch.Tensor, x_pe: torch.Tensor) -> torch.Tensor:
+        q = k = x + x_pe
         v = x
         x = self.attn(q, k, v, x0=x)
         x = self.norm1(x)
@@ -91,9 +91,9 @@ class DETREncoder(nn.Module):
             for i in range(n_layers)
         ])
 
-    def forward(self, x: torch.Tensor, pos: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, x_pe: torch.Tensor) -> torch.Tensor:
         for layer in self.layers:
-            x = layer(x, pos)
+            x = layer(x, x_pe)
 
         return x
 
@@ -108,20 +108,23 @@ class DETRDecoderLayer(nn.Module):
         self.ffn = FFN(embed_dim, drop_rate)
         self.norm3 = nn.LayerNorm(embed_dim)
 
-    def forward(self, y: torch.Tensor, x: torch.Tensor, pos: torch.Tensor, object_query: torch.Tensor) -> torch.Tensor:
-        q = k = y + object_query
-        v = y
-        y = self.self_attn(q, k, v, x0=y)
-        y = self.norm1(y)
+    def forward(self, c: torch.Tensor, x: torch.Tensor, x_pe: torch.Tensor, object_query: torch.Tensor) -> torch.Tensor:
+        # self attention
+        q = k = c + object_query
+        v = c
+        c = self.self_attn(q, k, v, x0=c)
+        c = self.norm1(c)
 
-        q = y + object_query
-        k = x + pos
+        # cross attention
+        q = c + object_query
+        k = x + x_pe
         v = x
-        y = self.cross_attn(q, k, v, x0=y)
-        y = self.norm2(y)
+        c = self.cross_attn(q, k, v, x0=c)
+        c = self.norm2(c)
 
-        y = self.ffn(y)
-        out = self.norm3(y)
+        # ffn
+        c = self.ffn(c)
+        out = self.norm3(c)
 
         return out
 
@@ -138,13 +141,13 @@ class DETRDecoder(nn.Module):
 
         nn.init.normal_(self.object_query)
 
-    def forward(self, x: torch.Tensor, pos: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, x_pe: torch.Tensor) -> torch.Tensor:
         outs = []
         object_query = self.object_query.unsqueeze(0).repeat(x.size(0), 1, 1)
-        y = torch.zeros_like(object_query)
+        c = torch.zeros_like(object_query)
         for layer in self.layers:
-            y = layer(y, x, pos, object_query)
-            outs.append(self.norm(y))
+            c = layer(c, x, x_pe, object_query)
+            outs.append(self.norm(c))
         outs = torch.stack(outs)
 
         return outs
@@ -159,7 +162,7 @@ class DETRHead(nn.Module):
 
         self.projection = nn.Conv2d(in_channels, embed_dim, 1)
         self.pos_encoding = SineEncoding(embed_dim, 2)
-        self.pos = None
+        self.x_pe = None
         self.encoder = DETREncoder(n_encoders, embed_dim, n_heads, dprs[:n_encoders])
         self.decoder = DETRDecoder(n_objs, n_decoders, embed_dim, n_heads, dprs[n_encoders:])
         self.reg_top = nn.Sequential(
@@ -177,13 +180,13 @@ class DETRHead(nn.Module):
         x = self.projection(xs[-1])
         _, _, h, w = x.shape
         x = nchw_to_nlc(x)
-        if self.pos is None:
+        if self.x_pe is None:
             pos_x = torch.arange(w, device=x.device).view(1, -1).repeat(h, 1).flatten() / w
             pos_y = torch.arange(h, device=x.device).view(-1, 1).repeat(1, w).flatten() / h
             pos = torch.stack([pos_x, pos_y], dim=-1).unsqueeze(0)
-            self.pos = self.pos_encoding(pos)
-        x = self.encoder(x, self.pos)
-        x = self.decoder(x, self.pos)
+            self.x_pe = self.pos_encoding(pos)
+        x = self.encoder(x, self.x_pe)
+        x = self.decoder(x, self.x_pe)
         reg_outs = self.reg_top(x).sigmoid()
         cls_outs = self.cls_top(x)
 

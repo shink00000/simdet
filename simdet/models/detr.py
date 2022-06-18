@@ -43,6 +43,27 @@ class FFN(nn.Module):
         return out
 
 
+class SineEncoding(nn.Module):
+    def __init__(self, embed_dim: int, n_dim: int, temperature: int = 10000):
+        assert n_dim in (2, 4)
+        super().__init__()
+        self.n_dim = n_dim
+        pos_dim = embed_dim // n_dim
+        dim_t = temperature ** (2 * torch.div(torch.arange(pos_dim), 2, rounding_mode='trunc') / pos_dim)
+        self.register_buffer('dim_t', dim_t)
+
+    def forward(self, pos: torch.Tensor) -> torch.Tensor:
+        assert pos.size(-1) == self.n_dim
+        new_pos = []
+        for i in range(self.n_dim):
+            p = 2 * torch.pi * pos[..., i, None] / self.dim_t
+            p = torch.stack((p[..., 0::2].sin(), p[..., 1::2].cos()), dim=-1).flatten(-2)
+            new_pos.append(p)
+        new_pos = torch.cat(new_pos, dim=-1)
+
+        return new_pos
+
+
 class DETREncoderLayer(nn.Module):
     def __init__(self, embed_dim, n_heads, drop_rate):
         super().__init__()
@@ -51,8 +72,8 @@ class DETREncoderLayer(nn.Module):
         self.ffn = FFN(embed_dim, drop_rate)
         self.norm2 = nn.LayerNorm(embed_dim)
 
-    def forward(self, x: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
-        q = k = x + pe
+    def forward(self, x: torch.Tensor, pos: torch.Tensor) -> torch.Tensor:
+        q = k = x + pos
         v = x
         x = self.attn(q, k, v, x0=x)
         x = self.norm1(x)
@@ -70,9 +91,9 @@ class DETREncoder(nn.Module):
             for i in range(n_layers)
         ])
 
-    def forward(self, x: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, pos: torch.Tensor) -> torch.Tensor:
         for layer in self.layers:
-            x = layer(x, pe)
+            x = layer(x, pos)
 
         return x
 
@@ -87,14 +108,14 @@ class DETRDecoderLayer(nn.Module):
         self.ffn = FFN(embed_dim, drop_rate)
         self.norm3 = nn.LayerNorm(embed_dim)
 
-    def forward(self, y: torch.Tensor, x: torch.Tensor, pe: torch.Tensor, object_query: torch.Tensor) -> torch.Tensor:
+    def forward(self, y: torch.Tensor, x: torch.Tensor, pos: torch.Tensor, object_query: torch.Tensor) -> torch.Tensor:
         q = k = y + object_query
         v = y
         y = self.self_attn(q, k, v, x0=y)
         y = self.norm1(y)
 
         q = y + object_query
-        k = x + pe
+        k = x + pos
         v = x
         y = self.cross_attn(q, k, v, x0=y)
         y = self.norm2(y)
@@ -117,12 +138,12 @@ class DETRDecoder(nn.Module):
 
         nn.init.normal_(self.object_query)
 
-    def forward(self, x: torch.Tensor, pe: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, pos: torch.Tensor) -> torch.Tensor:
         outs = []
-        object_queries = self.object_query.unsqueeze(0).repeat(x.size(0), 1, 1)
-        y = torch.zeros_like(object_queries)
+        object_query = self.object_query.unsqueeze(0).repeat(x.size(0), 1, 1)
+        y = torch.zeros_like(object_query)
         for layer in self.layers:
-            y = layer(y, x, pe, object_queries)
+            y = layer(y, x, pos, object_query)
             outs.append(self.norm(y))
         outs = torch.stack(outs)
 
@@ -133,13 +154,12 @@ class DETRHead(nn.Module):
     def __init__(self, in_channels: int, n_classes: int, n_objs: int = 100, n_encoders: int = 6, n_decoders: int = 6):
         super().__init__()
         embed_dim = 256
-        pos_dim = embed_dim // 2
         n_heads = 8
         dprs = torch.linspace(0, 0.1, n_encoders + n_decoders).tolist()
 
         self.projection = nn.Conv2d(in_channels, embed_dim, 1)
-        self.pe = None
-        self.dim_t = 10000 ** (2 * torch.div(torch.arange(pos_dim), 2, rounding_mode='trunc') / pos_dim)
+        self.pos_encoding = SineEncoding(embed_dim, 2)
+        self.pos = None
         self.encoder = DETREncoder(n_encoders, embed_dim, n_heads, dprs[:n_encoders])
         self.decoder = DETRDecoder(n_objs, n_decoders, embed_dim, n_heads, dprs[n_encoders:])
         self.reg_top = nn.Sequential(
@@ -155,34 +175,19 @@ class DETRHead(nn.Module):
 
     def forward(self, xs: list):
         x = self.projection(xs[-1])
-        if self.pe is None:
-            self.pe = self._pos_encoder(x)
+        _, _, h, w = x.shape
         x = nchw_to_nlc(x)
-        pe = nchw_to_nlc(self.pe.unsqueeze(0))
-        x = self.encoder(x, pe)
-        x = self.decoder(x, pe)
+        if self.pos is None:
+            pos_x = torch.arange(w, device=x.device).view(1, -1).repeat(h, 1).flatten() / w
+            pos_y = torch.arange(h, device=x.device).view(-1, 1).repeat(1, w).flatten() / h
+            pos = torch.stack([pos_x, pos_y], dim=-1).unsqueeze(0)
+            self.pos = self.pos_encoding(pos)
+        x = self.encoder(x, self.pos)
+        x = self.decoder(x, self.pos)
         reg_outs = self.reg_top(x).sigmoid()
         cls_outs = self.cls_top(x)
 
         return reg_outs, cls_outs
-
-    def _pos_encoder(self, x: torch.Tensor, eps: float = 1e-6):
-        lx, ly = x.size()[2:]
-        x_embed, y_embed = torch.meshgrid(
-            torch.arange(1, lx+1, dtype=torch.float32),
-            torch.arange(1, ly+1, dtype=torch.float32),
-            indexing='xy'
-        )
-        y_embed = 2 * torch.pi * y_embed / (y_embed[-1:, :] + eps)
-        x_embed = 2 * torch.pi * x_embed / (x_embed[:, -1:] + eps)
-
-        pos_x = x_embed[..., None] / self.dim_t
-        pos_y = y_embed[..., None] / self.dim_t
-        pos_x = torch.stack((pos_x[..., 0::2].sin(), pos_x[..., 1::2].cos()), dim=-1).flatten(-2)
-        pos_y = torch.stack((pos_y[..., 0::2].sin(), pos_y[..., 1::2].cos()), dim=-1).flatten(-2)
-        pos = torch.cat((pos_y, pos_x), dim=-1).permute(2, 0, 1).to(x.device)
-
-        return pos
 
     def _init_weights(self):
         for m in self.modules():

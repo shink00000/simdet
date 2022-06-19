@@ -89,7 +89,7 @@ class DABDETRDecoder(nn.Module):
     def forward(self, x: torch.Tensor, x_pe: torch.Tensor) -> torch.Tensor:
         outs, anchors = [], []
         anchor_query = self.anchor_query.unsqueeze(0).repeat(x.size(0), 1, 1)
-        c = torch.zeros((*anchor_query.shape[:2], x.shape[-1]))
+        c = anchor_query.new_zeros((*anchor_query.shape[:2], x.shape[-1]))
         for layer in self.layers:
             anchors.append(anchor_query)
 

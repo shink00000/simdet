@@ -141,7 +141,7 @@ class DETRDecoderLayer(nn.Module):
 
 
 class DETRDecoder(nn.Module):
-    def __init__(self, n_objs, n_layers, embed_dim, n_heads, drop_rates):
+    def __init__(self, n_objs, n_layers, embed_dim, n_heads, drop_rates, n_classes):
         super().__init__()
         self.object_query = nn.Parameter(torch.zeros(n_objs, embed_dim))
         self.layers = nn.ModuleList([
@@ -149,6 +149,14 @@ class DETRDecoder(nn.Module):
             for i in range(n_layers)
         ])
         self.norm = nn.LayerNorm(embed_dim)
+        self.reg_top = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(embed_dim, embed_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(embed_dim, 4)
+        )
+        self.cls_top = nn.Linear(embed_dim, n_classes)
 
         nn.init.normal_(self.object_query)
 
@@ -159,9 +167,12 @@ class DETRDecoder(nn.Module):
         for layer in self.layers:
             c = layer(c, x, x_pe, object_query)
             outs.append(self.norm(c))
+            object_query = object_query.detach()
         outs = torch.stack(outs)
+        reg_outs = self.reg_top(outs).sigmoid()
+        cls_outs = self.cls_top(outs)
 
-        return outs
+        return reg_outs, cls_outs
 
 
 class DETRHead(nn.Module):
@@ -175,15 +186,7 @@ class DETRHead(nn.Module):
         self.pos_encoding = SineEncoding(embed_dim, 2)
         self.x_pe = None
         self.encoder = DETREncoder(n_encoders, embed_dim, n_heads, dprs[:n_encoders])
-        self.decoder = DETRDecoder(n_objs, n_decoders, embed_dim, n_heads, dprs[n_encoders:])
-        self.reg_top = nn.Sequential(
-            nn.Linear(embed_dim, embed_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(embed_dim, embed_dim),
-            nn.ReLU(inplace=True),
-            nn.Linear(embed_dim, 4)
-        )
-        self.cls_top = nn.Linear(embed_dim, n_classes)
+        self.decoder = DETRDecoder(n_objs, n_decoders, embed_dim, n_heads, dprs[n_encoders:], n_classes)
 
         self._init_weights()
 
@@ -197,9 +200,7 @@ class DETRHead(nn.Module):
             pos = torch.stack([pos_x, pos_y], dim=-1).unsqueeze(0)
             self.x_pe = self.pos_encoding(pos)
         x = self.encoder(x, self.x_pe)
-        x = self.decoder(x, self.x_pe)
-        reg_outs = self.reg_top(x).sigmoid()
-        cls_outs = self.cls_top(x)
+        reg_outs, cls_outs = self.decoder(x, self.x_pe)
 
         return reg_outs, cls_outs
 

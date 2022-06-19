@@ -40,7 +40,7 @@ class DABDETRDecoderLayer(nn.Module):
 
         # cross attention
         q = torch.cat([c, pos_embed], dim=-1)
-        k = torch.cat([x, x_pe], dim=-1)
+        k = torch.cat([x, x_pe.repeat(x.size(0), 1, 1)], dim=-1)
         v = x
         c = self.cross_attn(q, k, v, x0=c)
         c = self.norm2(c)
@@ -139,12 +139,12 @@ class DABDETRHead(nn.Module):
 
     def forward(self, xs: list):
         x = self.projection(xs[-1])
-        n, _, h, w = x.shape
+        _, _, h, w = x.shape
         x = nchw_to_nlc(x)
         if self.x_pe is None:
             pos_x = torch.arange(w, device=x.device).view(1, -1).repeat(h, 1).flatten() / w
             pos_y = torch.arange(h, device=x.device).view(-1, 1).repeat(1, w).flatten() / h
-            pos = torch.stack([pos_x, pos_y], dim=-1).unsqueeze(0).repeat(n, 1, 1)
+            pos = torch.stack([pos_x, pos_y], dim=-1).unsqueeze(0)
             self.x_pe = self.pos_encoding(pos)
         x = self.encoder(x, self.x_pe)
         x, anchors = self.decoder(x, self.x_pe)

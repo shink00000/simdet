@@ -62,6 +62,16 @@ class DETRDecoderLayer(nn.Module):
         self.norm3 = nn.LayerNorm(embed_dim)
 
     def forward(self, c: torch.Tensor, x: torch.Tensor, x_pe: torch.Tensor, object_query: torch.Tensor) -> torch.Tensor:
+        """
+        Args:
+            c (torch.Tensor): (N, n_objs, C)
+            x (torch.Tensor): (N, L, C)
+            x_pe (torch.Tensor): (1, L, C)
+            object_query (torch.Tensor): (N, n_objs, C)
+
+        Returns:
+            torch.Tensor: (N, n_objs, C)
+        """
         # self attention
         shortcut = c
         q = k = c + object_query

@@ -3,61 +3,32 @@ import torch.nn as nn
 from torchvision.ops.boxes import generalized_box_iou, box_convert
 from scipy.optimize import linear_sum_assignment
 
-from .layers import nchw_to_nlc, DropPath, SineEncoding
+from .layers import nchw_to_nlc, MultiheadAttention, FeedForwardNetwork, DropPath, SineEncoding
 from .backbones import BACKBONES
 from .losses import GIoULoss, FocalLoss
 from .postprocesses import MultiLabelBasicProcess
 
 
-class MHA(nn.Module):
-    def __init__(self, embed_dim, n_heads, drop_rate):
-        super().__init__()
-        self.attn = nn.MultiheadAttention(embed_dim, n_heads, batch_first=True)
-        self.drop_path = DropPath(drop_rate)
-
-    def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, x0: torch.Tensor = None) -> torch.Tensor:
-        if x0 is None:
-            x0 = q
-        x = self.attn(q, k, v, need_weights=False)[0]
-        out = x0 + self.drop_path(x)
-
-        return out
-
-
-class FFN(nn.Module):
-    def __init__(self, embed_dim, drop_rate):
-        super().__init__()
-        hidden_dim = 4 * embed_dim
-        self.fc1 = nn.Linear(embed_dim, hidden_dim)
-        self.act = nn.ReLU(inplace=True)
-        self.fc2 = nn.Linear(hidden_dim, embed_dim)
-        self.drop_path = DropPath(drop_rate)
-
-    def forward(self, x: torch.Tensor, x0: torch.Tensor = None) -> torch.Tensor:
-        if x0 is None:
-            x0 = x
-        x = self.act(self.fc1(x))
-        x = self.fc2(x)
-        out = x0 + self.drop_path(x)
-
-        return out
-
-
 class DETREncoderLayer(nn.Module):
     def __init__(self, embed_dim, n_heads, drop_rate):
         super().__init__()
-        self.attn = MHA(embed_dim, n_heads, drop_rate)
+        self.attn = MultiheadAttention(embed_dim, n_heads)
+        self.drop1 = DropPath(drop_rate)
         self.norm1 = nn.LayerNorm(embed_dim)
-        self.ffn = FFN(embed_dim, drop_rate)
+        self.ffn = FeedForwardNetwork(embed_dim)
+        self.drop2 = DropPath(drop_rate)
         self.norm2 = nn.LayerNorm(embed_dim)
 
     def forward(self, x: torch.Tensor, x_pe: torch.Tensor) -> torch.Tensor:
+        shortcut = x
         q = k = x + x_pe
         v = x
-        x = self.attn(q, k, v, x0=x)
-        x = self.norm1(x)
+        x = self.attn(q, k, v)
+        x = self.norm1(x + self.drop1(shortcut))
+
+        shortcut = x
         x = self.ffn(x)
-        out = self.norm2(x)
+        out = self.norm2(x + self.drop2(shortcut))
 
         return out
 
@@ -80,30 +51,36 @@ class DETREncoder(nn.Module):
 class DETRDecoderLayer(nn.Module):
     def __init__(self, embed_dim, n_heads, drop_rate):
         super().__init__()
-        self.self_attn = MHA(embed_dim, n_heads, drop_rate)
+        self.self_attn = MultiheadAttention(embed_dim, n_heads)
+        self.drop1 = DropPath(drop_rate)
         self.norm1 = nn.LayerNorm(embed_dim)
-        self.cross_attn = MHA(embed_dim, n_heads, drop_rate)
+        self.cross_attn = MultiheadAttention(embed_dim, n_heads)
+        self.drop2 = DropPath(drop_rate)
         self.norm2 = nn.LayerNorm(embed_dim)
-        self.ffn = FFN(embed_dim, drop_rate)
+        self.ffn = FeedForwardNetwork(embed_dim)
+        self.drop3 = DropPath(drop_rate)
         self.norm3 = nn.LayerNorm(embed_dim)
 
     def forward(self, c: torch.Tensor, x: torch.Tensor, x_pe: torch.Tensor, object_query: torch.Tensor) -> torch.Tensor:
         # self attention
+        shortcut = c
         q = k = c + object_query
         v = c
-        c = self.self_attn(q, k, v, x0=c)
-        c = self.norm1(c)
+        c = self.self_attn(q, k, v)
+        c = self.norm1(c + self.drop1(shortcut))
 
         # cross attention
+        shortcut = c
         q = c + object_query
         k = x + x_pe
         v = x
-        c = self.cross_attn(q, k, v, x0=c)
-        c = self.norm2(c)
+        c = self.cross_attn(q, k, v)
+        c = self.norm2(c + self.drop2(shortcut))
 
         # ffn
+        shortcut = c
         c = self.ffn(c)
-        out = self.norm3(c)
+        out = self.norm3(c + self.drop3(shortcut))
 
         return out
 
@@ -160,15 +137,16 @@ class DETRHead(nn.Module):
 
     def forward(self, xs: list):
         x = self.projection(xs[-1])
-        _, _, h, w = x.shape
+        n, _, h, w = x.shape
         x = nchw_to_nlc(x)
         if self.x_pe is None:
             pos_x = torch.arange(w, device=x.device).view(1, -1).repeat(h, 1).flatten() / w
             pos_y = torch.arange(h, device=x.device).view(-1, 1).repeat(1, w).flatten() / h
             pos = torch.stack([pos_x, pos_y], dim=-1).unsqueeze(0)
             self.x_pe = self.pos_encoding(pos)
-        x = self.encoder(x, self.x_pe)
-        reg_outs, cls_outs = self.decoder(x, self.x_pe)
+        x_pe = self.x_pe.repeat(n, 1, 1)
+        x = self.encoder(x, x_pe)
+        reg_outs, cls_outs = self.decoder(x, x_pe)
 
         return reg_outs, cls_outs
 

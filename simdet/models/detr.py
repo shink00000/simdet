@@ -3,26 +3,22 @@ import torch.nn as nn
 from torchvision.ops.boxes import generalized_box_iou, box_convert
 from scipy.optimize import linear_sum_assignment
 
-from .layers import nchw_to_nlc, DropPath
+from .layers import nchw_to_nlc, DropPath, SineEncoding
 from .backbones import BACKBONES
 from .losses import GIoULoss, FocalLoss
 from .postprocesses import MultiLabelBasicProcess
 
 
 class MHA(nn.Module):
-    def __init__(self, embed_dim, n_heads, drop_rate, kdim=None, vdim=None):
+    def __init__(self, embed_dim, n_heads, drop_rate):
         super().__init__()
-        self.attn = nn.MultiheadAttention(embed_dim, n_heads, batch_first=True, kdim=kdim, vdim=vdim)
-        if vdim is not None and embed_dim != vdim:
-            self.proj = nn.Linear(embed_dim, vdim)
+        self.attn = nn.MultiheadAttention(embed_dim, n_heads, batch_first=True)
         self.drop_path = DropPath(drop_rate)
 
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, x0: torch.Tensor = None) -> torch.Tensor:
         if x0 is None:
             x0 = q
         x = self.attn(q, k, v, need_weights=False)[0]
-        if hasattr(self, 'proj'):
-            x = self.proj(x)
         out = x0 + self.drop_path(x)
 
         return out
@@ -45,34 +41,6 @@ class FFN(nn.Module):
         out = x0 + self.drop_path(x)
 
         return out
-
-
-class SineEncoding(nn.Module):
-    def __init__(self, embed_dim: int, n_dim: int, temperature: int = 10000):
-        assert n_dim in (2, 4)
-        super().__init__()
-        self.n_dim = n_dim
-        pos_dim = embed_dim // n_dim
-        dim_t = temperature ** (2 * torch.div(torch.arange(pos_dim), 2, rounding_mode='trunc') / pos_dim)
-        self.register_buffer('dim_t', dim_t)
-
-    def forward(self, pos: torch.Tensor) -> torch.Tensor:
-        """
-        Args:
-            pos (torch.Tensor): (N, L, n_dim)
-
-        Returns:
-            torch.Tensor: (N, L, n_dim)
-        """
-        assert pos.size(-1) == self.n_dim
-        pe = []
-        for i in range(self.n_dim):
-            p = 2 * torch.pi * pos[..., i, None] / self.dim_t
-            p = torch.stack((p[..., 0::2].sin(), p[..., 1::2].cos()), dim=-1).flatten(-2)
-            pe.append(p)
-        pe = torch.cat(pe, dim=-1)
-
-        return pe
 
 
 class DETREncoderLayer(nn.Module):
@@ -183,7 +151,7 @@ class DETRHead(nn.Module):
         dprs = torch.linspace(0, 0.1, n_encoders + n_decoders).tolist()
 
         self.projection = nn.Conv2d(in_channels, embed_dim, 1)
-        self.pos_encoding = SineEncoding(embed_dim, 2)
+        self.pos_encoding = SineEncoding(embed_dim//2)
         self.x_pe = None
         self.encoder = DETREncoder(n_encoders, embed_dim, n_heads, dprs[:n_encoders])
         self.decoder = DETRDecoder(n_objs, n_decoders, embed_dim, n_heads, dprs[n_encoders:], n_classes)

@@ -138,7 +138,7 @@ class DETRHead(nn.Module):
         dprs = torch.linspace(0, 0.1, n_encoders + n_decoders).tolist()
 
         self.projection = nn.Conv2d(in_channels, embed_dim, 1)
-        self.pos_encoding = SineEncoding(embed_dim//2)
+        self.pos_encoding = SineEncoding(embed_dim, 2)
         self.x_pe = None
         self.encoder = DETREncoder(n_encoders, embed_dim, n_heads, dprs[:n_encoders])
         self.decoder = DETRDecoder(n_objs, n_decoders, embed_dim, n_heads, dprs[n_encoders:], n_classes)

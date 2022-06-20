@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from torchvision.ops.boxes import generalized_box_iou, box_convert
 from scipy.optimize import linear_sum_assignment
 
 from .layers import (
-    nchw_to_nlc, MultiheadAttention, MultiheadAttentionV2,
+    nchw_to_nlc, MultiheadAttentionV2,
     FeedForwardNetwork, DropPath, SineEncoding
 )
 from .backbones import BACKBONES
@@ -15,7 +16,7 @@ from .postprocesses import MultiLabelBasicProcess
 class DABDETREncoderLayer(nn.Module):
     def __init__(self, embed_dim, n_heads, drop_rate):
         super().__init__()
-        self.attn = MultiheadAttention(embed_dim, n_heads)
+        self.attn = MultiheadAttentionV2(embed_dim, n_heads, mode='add')
         self.drop1 = DropPath(drop_rate)
         self.norm1 = nn.LayerNorm(embed_dim)
         self.ffn = FeedForwardNetwork(embed_dim, activation=nn.PReLU)
@@ -24,9 +25,9 @@ class DABDETREncoderLayer(nn.Module):
 
     def forward(self, x: torch.Tensor, x_pe: torch.Tensor) -> torch.Tensor:
         shortcut = x
-        q = k = x + x_pe
+        q_c, q_p = k_c, k_p = x, x_pe
         v = x
-        x = self.attn(q, k, v)
+        x = self.attn(q_c, q_p, k_c, k_p, v)
         x = self.norm1(x + self.drop1(shortcut))
 
         shortcut = x
@@ -52,17 +53,18 @@ class DABDETREncoder(nn.Module):
 
 
 class DABDETRDecoderLayer(nn.Module):
-    def __init__(self, embed_dim, n_heads, drop_rate):
+    def __init__(self, embed_dim, n_heads, drop_rate, is_first):
         super().__init__()
-        self.self_attn = MultiheadAttention(embed_dim, n_heads)
+        self.self_attn = MultiheadAttentionV2(embed_dim, n_heads, mode='add')
         self.drop1 = DropPath(drop_rate)
         self.norm1 = nn.LayerNorm(embed_dim)
-        self.cross_attn = MultiheadAttentionV2(embed_dim, n_heads)
+        self.cross_attn = MultiheadAttentionV2(embed_dim, n_heads, mode='cat')
         self.drop2 = DropPath(drop_rate)
         self.norm2 = nn.LayerNorm(embed_dim)
         self.ffn = FeedForwardNetwork(embed_dim, activation=nn.PReLU)
         self.drop3 = DropPath(drop_rate)
         self.norm3 = nn.LayerNorm(embed_dim)
+        self.is_first = is_first
 
     def forward(self, c: torch.Tensor, x: torch.Tensor, x_pe: torch.Tensor,
                 pos_query: torch.Tensor, pos_embed: torch.Tensor) -> torch.Tensor:
@@ -79,17 +81,19 @@ class DABDETRDecoderLayer(nn.Module):
         """
         # self attention
         shortcut = c
-        q = k = c + pos_query
+        q_c, q_p = k_c, k_p = c, pos_query
         v = c
-        c = self.self_attn(q, k, v)
+        c = self.self_attn(q_c, q_p, k_c, k_p, v)
         c = self.norm1(c + self.drop1(shortcut))
 
         # cross attention
         shortcut = c
-        q_c = c
-        q_p = pos_embed
-        k_c = x
-        k_p = x_pe
+        if self.is_first:
+            q_c, q_p = c, pos_embed
+            k_c, k_p = x, x_pe
+        else:
+            q_c, q_p = c + pos_query, pos_embed
+            k_c, k_p = x + x_pe, x_pe
         v = x
         c = self.cross_attn(q_c, q_p, k_c, k_p, v)
         c = self.norm2(c + self.drop2(shortcut))
@@ -108,10 +112,10 @@ class DABDETRDecoder(nn.Module):
         self.object_query = nn.Parameter(torch.zeros(n_objs, 4))
         self.embed_dim = embed_dim
         self.layers = nn.ModuleList([
-            DABDETRDecoderLayer(embed_dim, n_heads, drop_rates[i])
+            DABDETRDecoderLayer(embed_dim, n_heads, drop_rates[i], is_first=i == 0)
             for i in range(n_layers)
         ])
-        self.pos_encoding = SineEncoding(embed_dim//2, temperature=10000)
+        self.pos_encoding = SineEncoding(2*embed_dim, 4, temperature=20)
         self.mlp_pe_proj = nn.Sequential(
             nn.Linear(2*embed_dim, embed_dim),
             nn.ReLU(inplace=True),
@@ -143,7 +147,7 @@ class DABDETRDecoder(nn.Module):
         outs, anchors = [], []
         object_query = self.object_query.unsqueeze(0).repeat(x.size(0), 1, 1)
         c = object_query.new_zeros((*object_query.shape[:2], x.shape[-1]))
-        for layer in self.layers:
+        for i, layer in enumerate(self.layers):
             anchors.append(object_query)
 
             # positional query for self attention
@@ -151,7 +155,7 @@ class DABDETRDecoder(nn.Module):
             pos_query = self.mlp_pe_proj(pe)
 
             # positional (modulated) embedding for cross attention
-            pos_embed = pe[..., :self.embed_dim] * self.mlp_ref_xy(c)
+            pos_embed = pe[..., :self.embed_dim] * (1 if i == 0 else self.mlp_ref_xy(c))
             w_ref, h_ref = self.mlp_ref_wh(c).sigmoid().split(1, dim=-1)
             w, h = object_query[..., 2:].sigmoid().split(1, dim=-1)
             pos_embed[..., :self.embed_dim//2] *= w_ref / w
@@ -174,10 +178,11 @@ class DABDETRHead(nn.Module):
         super().__init__()
         embed_dim = 256
         n_heads = 8
-        dprs = torch.linspace(0, 0.1, n_encoders + n_decoders).tolist()
+        # dprs = torch.linspace(0, 0.1, n_encoders + n_decoders).tolist()
+        dprs = [0.0] * (n_encoders + n_decoders)
 
         self.projection = nn.Conv2d(in_channels, embed_dim, 1)
-        self.pos_encoding = SineEncoding(embed_dim//2, temperature=20)
+        self.pos_encoding = SineEncoding(embed_dim, 2, temperature=20)
         self.x_pe = None
         self.encoder = DABDETREncoder(n_encoders, embed_dim, n_heads, dprs[:n_encoders])
         self.decoder = DABDETRDecoder(n_objs, n_decoders, embed_dim, n_heads, dprs[n_encoders:], n_classes)
@@ -205,11 +210,12 @@ class DABDETRHead(nn.Module):
                 nn.init.xavier_uniform_(m.weight)
         nn.init.constant_(self.decoder.reg_top[-1].weight, 0)
         nn.init.constant_(self.decoder.reg_top[-1].bias, 0)
+        nn.init.constant_(self.decoder.cls_top.bias, np.log((1 - 0.01) / 0.01))
 
 
 class DABDETR(nn.Module):
     def __init__(self, backbone: dict, n_classes: int, input_size: list, n_objs: int = 100,
-                 lmd_l1: int = 1, lmd_iou: int = 1):
+                 lmd_l1: int = 5, lmd_iou: int = 2):
         super().__init__()
 
         # layers

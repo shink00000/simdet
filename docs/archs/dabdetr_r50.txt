@@ -1,4 +1,4 @@
-DETR(
+DABDETR(
   (backbone): ResNet(
     (conv1): Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
     (bn1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
@@ -173,12 +173,12 @@ DETR(
       )
     )
   )
-  (head): DETRHead(
+  (head): DABDETRHead(
     (projection): Conv2d(2048, 256, kernel_size=(1, 1), stride=(1, 1))
-    (pos_encoding): SineEncoding(temperature=10000)
-    (encoder): DETREncoder(
+    (pos_encoding): SineEncoding(temperature=20)
+    (encoder): DABDETREncoder(
       (layers): ModuleList(
-        (0): DETREncoderLayer(
+        (0): DABDETREncoderLayer(
           (attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -189,13 +189,13 @@ DETR(
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop2): DropPath(drop_prob=0.0)
           (norm2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
         )
-        (1): DETREncoderLayer(
+        (1): DABDETREncoderLayer(
           (attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -206,13 +206,13 @@ DETR(
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop2): DropPath(drop_prob=0.00909090880304575)
           (norm2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
         )
-        (2): DETREncoderLayer(
+        (2): DABDETREncoderLayer(
           (attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -223,13 +223,13 @@ DETR(
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop2): DropPath(drop_prob=0.0181818176060915)
           (norm2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
         )
-        (3): DETREncoderLayer(
+        (3): DABDETREncoderLayer(
           (attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -240,13 +240,13 @@ DETR(
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop2): DropPath(drop_prob=0.027272727340459824)
           (norm2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
         )
-        (4): DETREncoderLayer(
+        (4): DABDETREncoderLayer(
           (attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -257,13 +257,13 @@ DETR(
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop2): DropPath(drop_prob=0.036363635212183)
           (norm2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
         )
-        (5): DETREncoderLayer(
+        (5): DABDETREncoderLayer(
           (attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -274,7 +274,7 @@ DETR(
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop2): DropPath(drop_prob=0.045454543083906174)
@@ -282,9 +282,9 @@ DETR(
         )
       )
     )
-    (decoder): DETRDecoder(
+    (decoder): DABDETRDecoder(
       (layers): ModuleList(
-        (0): DETRDecoderLayer(
+        (0): DABDETRDecoderLayer(
           (self_attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -293,9 +293,11 @@ DETR(
           )
           (drop1): DropPath(drop_prob=0.054545458406209946)
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
-          (cross_attn): MultiheadAttention(
-            (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
-            (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
+          (cross_attn): MultiheadAttentionV2(
+            (in_proj_q_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_q_p): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_p): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_v): Linear(in_features=256, out_features=256, bias=True)
             (out_proj): Linear(in_features=256, out_features=256, bias=True)
           )
@@ -303,13 +305,13 @@ DETR(
           (norm2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop3): DropPath(drop_prob=0.054545458406209946)
           (norm3): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
         )
-        (1): DETRDecoderLayer(
+        (1): DABDETRDecoderLayer(
           (self_attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -318,9 +320,11 @@ DETR(
           )
           (drop1): DropPath(drop_prob=0.06363636255264282)
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
-          (cross_attn): MultiheadAttention(
-            (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
-            (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
+          (cross_attn): MultiheadAttentionV2(
+            (in_proj_q_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_q_p): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_p): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_v): Linear(in_features=256, out_features=256, bias=True)
             (out_proj): Linear(in_features=256, out_features=256, bias=True)
           )
@@ -328,13 +332,13 @@ DETR(
           (norm2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop3): DropPath(drop_prob=0.06363636255264282)
           (norm3): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
         )
-        (2): DETRDecoderLayer(
+        (2): DABDETRDecoderLayer(
           (self_attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -343,9 +347,11 @@ DETR(
           )
           (drop1): DropPath(drop_prob=0.0727272778749466)
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
-          (cross_attn): MultiheadAttention(
-            (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
-            (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
+          (cross_attn): MultiheadAttentionV2(
+            (in_proj_q_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_q_p): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_p): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_v): Linear(in_features=256, out_features=256, bias=True)
             (out_proj): Linear(in_features=256, out_features=256, bias=True)
           )
@@ -353,13 +359,13 @@ DETR(
           (norm2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop3): DropPath(drop_prob=0.0727272778749466)
           (norm3): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
         )
-        (3): DETRDecoderLayer(
+        (3): DABDETRDecoderLayer(
           (self_attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -368,9 +374,11 @@ DETR(
           )
           (drop1): DropPath(drop_prob=0.08181818574666977)
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
-          (cross_attn): MultiheadAttention(
-            (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
-            (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
+          (cross_attn): MultiheadAttentionV2(
+            (in_proj_q_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_q_p): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_p): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_v): Linear(in_features=256, out_features=256, bias=True)
             (out_proj): Linear(in_features=256, out_features=256, bias=True)
           )
@@ -378,13 +386,13 @@ DETR(
           (norm2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop3): DropPath(drop_prob=0.08181818574666977)
           (norm3): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
         )
-        (4): DETRDecoderLayer(
+        (4): DABDETRDecoderLayer(
           (self_attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -393,9 +401,11 @@ DETR(
           )
           (drop1): DropPath(drop_prob=0.09090909361839294)
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
-          (cross_attn): MultiheadAttention(
-            (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
-            (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
+          (cross_attn): MultiheadAttentionV2(
+            (in_proj_q_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_q_p): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_p): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_v): Linear(in_features=256, out_features=256, bias=True)
             (out_proj): Linear(in_features=256, out_features=256, bias=True)
           )
@@ -403,13 +413,13 @@ DETR(
           (norm2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop3): DropPath(drop_prob=0.09090909361839294)
           (norm3): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
         )
-        (5): DETRDecoderLayer(
+        (5): DABDETRDecoderLayer(
           (self_attn): MultiheadAttention(
             (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
@@ -418,9 +428,11 @@ DETR(
           )
           (drop1): DropPath(drop_prob=0.10000000149011612)
           (norm1): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
-          (cross_attn): MultiheadAttention(
-            (in_proj_q): Linear(in_features=256, out_features=256, bias=True)
-            (in_proj_k): Linear(in_features=256, out_features=256, bias=True)
+          (cross_attn): MultiheadAttentionV2(
+            (in_proj_q_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_q_p): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_c): Linear(in_features=256, out_features=256, bias=True)
+            (in_proj_k_p): Linear(in_features=256, out_features=256, bias=True)
             (in_proj_v): Linear(in_features=256, out_features=256, bias=True)
             (out_proj): Linear(in_features=256, out_features=256, bias=True)
           )
@@ -428,12 +440,28 @@ DETR(
           (norm2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
           (ffn): FeedForwardNetwork(
             (fc1): Linear(in_features=256, out_features=1024, bias=True)
-            (act): ReLU(inplace=True)
+            (act): PReLU(num_parameters=1)
             (fc2): Linear(in_features=1024, out_features=256, bias=True)
           )
           (drop3): DropPath(drop_prob=0.10000000149011612)
           (norm3): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
         )
+      )
+      (pos_encoding): SineEncoding(temperature=10000)
+      (mlp_pe_proj): Sequential(
+        (0): Linear(in_features=512, out_features=256, bias=True)
+        (1): ReLU(inplace=True)
+        (2): Linear(in_features=256, out_features=256, bias=True)
+      )
+      (mlp_ref_xy): Sequential(
+        (0): Linear(in_features=256, out_features=256, bias=True)
+        (1): ReLU(inplace=True)
+        (2): Linear(in_features=256, out_features=256, bias=True)
+      )
+      (mlp_ref_wh): Sequential(
+        (0): Linear(in_features=256, out_features=256, bias=True)
+        (1): ReLU(inplace=True)
+        (2): Linear(in_features=256, out_features=2, bias=True)
       )
       (norm): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
       (reg_top): Sequential(

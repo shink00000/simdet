@@ -44,10 +44,15 @@ class DABDETREncoder(nn.Module):
             DABDETREncoderLayer(embed_dim, n_heads, drop_rates[i])
             for i in range(n_layers)
         ])
+        self.mlp = nn.Sequential(
+            nn.Linear(embed_dim, embed_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(embed_dim, embed_dim)
+        )
 
     def forward(self, x: torch.Tensor, x_pe: torch.Tensor) -> torch.Tensor:
         for layer in self.layers:
-            x = layer(x, x_pe)
+            x = layer(x, x_pe * self.mlp(x))
 
         return x
 

@@ -165,8 +165,6 @@ class DETRHead(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
-        nn.init.constant_(self.decoder.reg_top[-1].weight, 0)
-        nn.init.constant_(self.decoder.reg_top[-1].bias, 0)
         nn.init.constant_(self.decoder.cls_top.bias, np.log((1 - 0.01) / 0.01))
 
 

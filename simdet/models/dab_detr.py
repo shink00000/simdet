@@ -4,10 +4,7 @@ import numpy as np
 from torchvision.ops.boxes import generalized_box_iou, box_convert
 from scipy.optimize import linear_sum_assignment
 
-from .layers import (
-    nchw_to_nlc, MultiheadAttentionV2,
-    FeedForwardNetwork, DropPath, SineEncoding
-)
+from .layers import nchw_to_nlc, MultiheadAttentionV2, FeedForwardNetwork, DropPath, SineEncoding
 from .backbones import BACKBONES
 from .losses import GIoULoss, FocalLoss
 from .postprocesses import MultiLabelBasicProcess
@@ -183,8 +180,7 @@ class DABDETRHead(nn.Module):
         super().__init__()
         embed_dim = 256
         n_heads = 8
-        # dprs = torch.linspace(0, 0.1, n_encoders + n_decoders).tolist()
-        dprs = [0.0] * (n_encoders + n_decoders)
+        dprs = torch.linspace(0, 0.1, n_encoders + n_decoders).tolist()
 
         self.projection = nn.Conv2d(in_channels, embed_dim, 1)
         self.pos_encoding = SineEncoding(embed_dim, 2, temperature=20)

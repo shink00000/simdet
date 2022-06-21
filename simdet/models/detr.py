@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 from torchvision.ops.boxes import generalized_box_iou, box_convert
 from scipy.optimize import linear_sum_assignment
 
@@ -164,11 +165,14 @@ class DETRHead(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
+        nn.init.constant_(self.decoder.reg_top[-1].weight, 0)
+        nn.init.constant_(self.decoder.reg_top[-1].bias, 0)
+        nn.init.constant_(self.decoder.cls_top.bias, np.log((1 - 0.01) / 0.01))
 
 
 class DETR(nn.Module):
     def __init__(self, backbone: dict, n_classes: int, input_size: list, n_objs: int = 100,
-                 lmd_l1: int = 1, lmd_iou: int = 1):
+                 lmd_l1: int = 5, lmd_iou: int = 2):
         super().__init__()
 
         # layers

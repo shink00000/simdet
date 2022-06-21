@@ -25,7 +25,7 @@ optimizer:
 
 scheduler:
   type: MultiStepLR
-  milestones: [100]
+  milestones: [50]
   gamma: 0.1
 
 metric:
@@ -34,4 +34,4 @@ metric:
 
 runtime:
   clip_norm: 0.1
-  epochs: 140
+  epochs: 70

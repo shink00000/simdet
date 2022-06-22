@@ -98,24 +98,23 @@ This repository will reproduce and implement well-known Detection models.
   - num_queries: 100 -> 40
   - class loss: CrossEntropy -> FocalLoss (therefore eof_coef is no longer used)
     - also, change the denominator of the average loss to the number of GTs.
-  - all cost/loss coefs are equal to 1
 - [config](./configs/detr_r50_voc_h512_w512.yaml)
   - data: PascalVOC 2017 + 2012
   - input_size: (512, 512)
   - backbone: ResNet50
-- [tensorboard](https://tensorboard.dev/experiment/mQFpY2xBQ9GZ6Lu71WvYtw/)
+- [tensorboard](https://tensorboard.dev/experiment/0ZEH5dlrQji1HwFDFoqLWA/)
 - evaluation result
   ```
-  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.489
-  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.776
-  Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.516
-  Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.052
-  Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.257
-  Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.587
-  Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.464
-  Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.614
-  Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.624
-  Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.220
-  Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.413
-  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.718
+  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.533
+  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.797
+  Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.574
+  Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.110
+  Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.292
+  Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.632
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.475
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.655
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.678
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.235
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.475
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.774
   ```

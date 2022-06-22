@@ -175,7 +175,7 @@ DETR(
   )
   (head): DETRHead(
     (projection): Conv2d(2048, 256, kernel_size=(1, 1), stride=(1, 1))
-    (pos_encoding): SineEncoding(temperature=10000)
+    (pos_encoding): SineEncoding(embed_dim=256, temperature=10000)
     (encoder): DETREncoder(
       (layers): ModuleList(
         (0): DETREncoderLayer(

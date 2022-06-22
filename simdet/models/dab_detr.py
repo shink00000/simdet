@@ -55,7 +55,7 @@ class DABDETREncoder(nn.Module):
 
 
 class DABDETRDecoderLayer(nn.Module):
-    def __init__(self, embed_dim, n_heads, drop_rate, is_first):
+    def __init__(self, embed_dim, n_heads, drop_rate):
         super().__init__()
         self.self_attn = MultiheadAttentionV2(embed_dim, n_heads, mode='add')
         self.drop1 = DropPath(drop_rate)
@@ -66,36 +66,34 @@ class DABDETRDecoderLayer(nn.Module):
         self.ffn = FeedForwardNetwork(embed_dim, activation=nn.PReLU)
         self.drop3 = DropPath(drop_rate)
         self.norm3 = nn.LayerNorm(embed_dim)
-        self.is_first = is_first
 
     def forward(self, con_query: torch.Tensor, x: torch.Tensor, x_pe: torch.Tensor,
-                pos_query: torch.Tensor, pos_embed: torch.Tensor) -> torch.Tensor:
+                pos_query_sa: torch.Tensor, pos_query_ca: torch.Tensor,
+                q_c_add: torch.Tensor = 0, k_c_add: torch.Tensor = 0) -> torch.Tensor:
         """
         Args:
             con_query (torch.Tensor): (N, n_objs, C)
             x (torch.Tensor): (N, L, C)
             x_pe (torch.Tensor): (1, L, C)
-            pos_query (torch.Tensor): (N, n_objs, C) for self attention
-            pos_embed (torch.Tensor): (N, n_objs, C) for cross attention
+            pos_query_sa (torch.Tensor): (N, n_objs, C) for self attention
+            pos_query_ca (torch.Tensor): (N, n_objs, C) for cross attention
+            q_c_add (torch.Tensor, optional): (N, n_objs, C) for cross attention. Defaults to 0.
+            k_c_add (torch.Tensor, optional): (N, L, C) for cross attention. Defaults to 0.
 
         Returns:
             torch.Tensor: (N, n_objs, C)
         """
         # self attention
         shortcut = con_query
-        q_c, q_p = k_c, k_p = con_query, pos_query
+        q_c, q_p = k_c, k_p = con_query, pos_query_sa
         v = con_query
         con_query = self.self_attn(q_c, q_p, k_c, k_p, v)
         con_query = self.norm1(con_query + self.drop1(shortcut))
 
         # cross attention
         shortcut = con_query
-        if self.is_first:
-            q_c, q_p = con_query, pos_embed
-            k_c, k_p = x, x_pe
-        else:
-            q_c, q_p = con_query + pos_query, pos_embed
-            k_c, k_p = x + x_pe, x_pe
+        q_c, q_p = con_query + q_c_add, pos_query_ca
+        k_c, k_p = x + k_c_add, x_pe
         v = x
         con_query = self.cross_attn(q_c, q_p, k_c, k_p, v)
         con_query = self.norm2(con_query + self.drop2(shortcut))
@@ -111,10 +109,10 @@ class DABDETRDecoderLayer(nn.Module):
 class DABDETRDecoder(nn.Module):
     def __init__(self, n_objs, n_layers, embed_dim, n_heads, drop_rates, n_classes):
         super().__init__()
-        self.object_query = nn.Parameter(torch.zeros(n_objs, 4))
+        self.anchor = nn.Parameter(torch.zeros(n_objs, 4))
         self.embed_dim = embed_dim
         self.layers = nn.ModuleList([
-            DABDETRDecoderLayer(embed_dim, n_heads, drop_rates[i], is_first=i == 0)
+            DABDETRDecoderLayer(embed_dim, n_heads, drop_rates[i])
             for i in range(n_layers)
         ])
         self.pos_encoding = SineEncoding(2*embed_dim, 4, temperature=20)
@@ -143,29 +141,32 @@ class DABDETRDecoder(nn.Module):
         )
         self.cls_top = nn.Linear(embed_dim, n_classes)
 
-        nn.init.normal_(self.object_query)
+        nn.init.normal_(self.anchor)
 
     def forward(self, x: torch.Tensor, x_pe: torch.Tensor) -> torch.Tensor:
         outs, anchors = [], []
-        object_query = self.object_query.unsqueeze(0).repeat(x.size(0), 1, 1)
-        con_query = torch.zeros((*object_query.shape[:2], x.shape[-1]), device=x.device)
+        anchor = self.anchor.unsqueeze(0).repeat(x.size(0), 1, 1)
+        con_query = torch.zeros((*anchor.shape[:2], x.shape[-1]), device=x.device)
         for i, layer in enumerate(self.layers):
-            anchors.append(object_query)
+            anchors.append(anchor)
 
             # positional query for self attention
-            pe = self.pos_encoding(object_query.sigmoid())
-            pos_query = self.mlp_pe_proj(pe)
+            pe = self.pos_encoding(anchor.sigmoid())
+            pos_query_sa = self.mlp_pe_proj(pe)
 
-            # positional (modulated) embedding for cross attention
-            pos_embed = pe[..., :self.embed_dim] * (1 if i == 0 else self.mlp_ref_xy(con_query))
+            # positional (modulated) query for cross attention
+            pos_query_ca = pe[..., :self.embed_dim] * (1 if i == 0 else self.mlp_ref_xy(con_query))
             w_ref, h_ref = self.mlp_ref_wh(con_query).sigmoid().split(1, dim=-1)
-            w, h = object_query[..., 2:].sigmoid().split(1, dim=-1)
-            pos_embed[..., :self.embed_dim//2] *= w_ref / w
-            pos_embed[..., self.embed_dim//2:] *= h_ref / h
+            w, h = anchor[..., 2:].sigmoid().split(1, dim=-1)
+            pos_query_ca[..., :self.embed_dim//2] *= w_ref / w
+            pos_query_ca[..., self.embed_dim//2:] *= h_ref / h
 
-            con_query = layer(con_query, x, x_pe, pos_query, pos_embed)
+            if i == 0:
+                con_query = layer(con_query, x, x_pe, pos_query_sa, pos_query_ca, q_c_add=pos_query_sa, k_c_add=x_pe)
+            else:
+                con_query = layer(con_query, x, x_pe, pos_query_sa, pos_query_ca)
             outs.append(self.norm(con_query))
-            object_query = (object_query + self.reg_top(con_query)).detach()
+            anchor = (anchor + self.reg_top(con_query)).detach()
 
         outs = torch.stack(outs)
         anchors = torch.stack(anchors)

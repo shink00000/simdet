@@ -62,10 +62,10 @@ class DETRDecoderLayer(nn.Module):
         self.drop3 = DropPath(drop_rate)
         self.norm3 = nn.LayerNorm(embed_dim)
 
-    def forward(self, c: torch.Tensor, x: torch.Tensor, x_pe: torch.Tensor, object_query: torch.Tensor) -> torch.Tensor:
+    def forward(self, con_query: torch.Tensor, x: torch.Tensor, x_pe: torch.Tensor, object_query: torch.Tensor) -> torch.Tensor:
         """
         Args:
-            c (torch.Tensor): (N, n_objs, C)
+            con_query (torch.Tensor): (N, n_objs, C)
             x (torch.Tensor): (N, L, C)
             x_pe (torch.Tensor): (1, L, C)
             object_query (torch.Tensor): (N, n_objs, C)
@@ -74,24 +74,24 @@ class DETRDecoderLayer(nn.Module):
             torch.Tensor: (N, n_objs, C)
         """
         # self attention
-        shortcut = c
-        q = k = c + object_query
-        v = c
-        c = self.self_attn(q, k, v)
-        c = self.norm1(c + self.drop1(shortcut))
+        shortcut = con_query
+        q = k = con_query + object_query
+        v = con_query
+        con_query = self.self_attn(q, k, v)
+        con_query = self.norm1(con_query + self.drop1(shortcut))
 
         # cross attention
-        shortcut = c
-        q = c + object_query
+        shortcut = con_query
+        q = con_query + object_query
         k = x + x_pe
         v = x
-        c = self.cross_attn(q, k, v)
-        c = self.norm2(c + self.drop2(shortcut))
+        con_query = self.cross_attn(q, k, v)
+        con_query = self.norm2(con_query + self.drop2(shortcut))
 
         # ffn
-        shortcut = c
-        c = self.ffn(c)
-        out = self.norm3(c + self.drop3(shortcut))
+        shortcut = con_query
+        con_query = self.ffn(con_query)
+        out = self.norm3(con_query + self.drop3(shortcut))
 
         return out
 
@@ -119,10 +119,10 @@ class DETRDecoder(nn.Module):
     def forward(self, x: torch.Tensor, x_pe: torch.Tensor) -> torch.Tensor:
         outs = []
         object_query = self.object_query.unsqueeze(0).repeat(x.size(0), 1, 1)
-        c = torch.zeros_like(object_query)
+        con_query = torch.zeros_like(object_query)
         for layer in self.layers:
-            c = layer(c, x, x_pe, object_query)
-            outs.append(self.norm(c))
+            con_query = layer(con_query, x, x_pe, object_query)
+            outs.append(self.norm(con_query))
             object_query = object_query.detach()
         outs = torch.stack(outs)
         reg_outs = self.reg_top(outs).sigmoid()

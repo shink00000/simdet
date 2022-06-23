@@ -25,11 +25,13 @@ class DETREncoderLayer(nn.Module):
         q = k = x + x_pe
         v = x
         x = self.attn(q, k, v)
-        x = self.norm1(x + self.drop1(shortcut))
+        x = shortcut + self.drop1(x)
+        x = self.norm1(x)
 
         shortcut = x
         x = self.ffn(x)
-        out = self.norm2(x + self.drop2(shortcut))
+        x = shortcut + self.drop2(x)
+        out = self.norm2(x)
 
         return out
 
@@ -78,7 +80,8 @@ class DETRDecoderLayer(nn.Module):
         q = k = con_query + object_query
         v = con_query
         con_query = self.self_attn(q, k, v)
-        con_query = self.norm1(con_query + self.drop1(shortcut))
+        con_query = shortcut + self.drop1(con_query)
+        con_query = self.norm1(con_query)
 
         # cross attention
         shortcut = con_query
@@ -86,12 +89,14 @@ class DETRDecoderLayer(nn.Module):
         k = x + x_pe
         v = x
         con_query = self.cross_attn(q, k, v)
-        con_query = self.norm2(con_query + self.drop2(shortcut))
+        con_query = shortcut + self.drop2(con_query)
+        con_query = self.norm2(con_query)
 
         # ffn
         shortcut = con_query
         con_query = self.ffn(con_query)
-        out = self.norm3(con_query + self.drop3(shortcut))
+        con_query = shortcut + self.drop3(con_query)
+        out = self.norm3(con_query)
 
         return out
 

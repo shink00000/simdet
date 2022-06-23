@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from ..layers import nlc_to_nchw, nchw_to_nlc, DropPath
+from ..layers import nlc_to_nchw, nchw_to_nlc, MultiheadAttention, DropPath
 
 
 class OverlapPatchEmbeding(nn.Module):
@@ -26,15 +26,14 @@ class OverlapPatchEmbeding(nn.Module):
 
 
 class EfficientSelfAttention(nn.Module):
-    def __init__(self, embed_dim, n_heads, reduce_ratio, drop_path_rate):
+    def __init__(self, embed_dim, n_heads, reduce_ratio):
         super().__init__()
-        self.attn = nn.MultiheadAttention(embed_dim, n_heads, batch_first=True)
         if reduce_ratio > 1:
             self.reduction = nn.Conv2d(embed_dim, embed_dim, reduce_ratio, stride=reduce_ratio)
             self.norm = nn.LayerNorm(embed_dim, eps=1e-6)
-        self.drop_path = DropPath(drop_path_rate)
+        self.attn = MultiheadAttention(embed_dim, n_heads)
 
-    def forward(self, x, x0, h, w):
+    def forward(self, x, h, w):
         x_q = x
 
         if hasattr(self, 'reduction'):
@@ -45,29 +44,26 @@ class EfficientSelfAttention(nn.Module):
         else:
             x_kv = x
 
-        x = self.attn(x_q, x_kv, x_kv, need_weights=False)[0]
-        out = x0 + self.drop_path(x)
+        out = self.attn(x_q, x_kv, x_kv)
 
         return out
 
 
 class MixFFN(nn.Module):
-    def __init__(self, embed_dim, drop_path_rate):
+    def __init__(self, embed_dim):
         super().__init__()
         hidden_dim = 4 * embed_dim
         self.fc1 = nn.Linear(embed_dim, hidden_dim)
         self.conv = nn.Conv2d(hidden_dim, hidden_dim, 3, padding=1, groups=hidden_dim)
         self.act = nn.GELU()
         self.fc2 = nn.Linear(hidden_dim, embed_dim)
-        self.drop_path = DropPath(drop_path_rate)
 
-    def forward(self, x, x0, h, w):
+    def forward(self, x, h, w):
         x = self.fc1(x)
         x = nlc_to_nchw(x, h, w)
         x = self.act(self.conv(x))
         x = nchw_to_nlc(x)
-        x = self.fc2(x)
-        out = x0 + self.drop_path(x)
+        out = self.fc2(x)
 
         return out
 
@@ -76,13 +72,22 @@ class TransformerLayer(nn.Module):
     def __init__(self, embed_dim, n_heads, reduce_ratio, drop_path_rate):
         super().__init__()
         self.norm1 = nn.LayerNorm(embed_dim, eps=1e-6)
-        self.attn = EfficientSelfAttention(embed_dim, n_heads, reduce_ratio, drop_path_rate)
+        self.attn = EfficientSelfAttention(embed_dim, n_heads, reduce_ratio)
+        self.drop1 = DropPath(drop_path_rate)
         self.norm2 = nn.LayerNorm(embed_dim, eps=1e-6)
-        self.ffn = MixFFN(embed_dim, drop_path_rate)
+        self.ffn = MixFFN(embed_dim)
+        self.drop2 = DropPath(drop_path_rate)
 
     def forward(self, x, h, w):
-        x = self.attn(self.norm1(x), x, h, w)
-        out = self.ffn(self.norm2(x), x, h, w)
+        shortcut = x
+        x = self.norm1(x)
+        x = self.attn(x, h, w)
+        x = shortcut + self.drop1(x)
+
+        shortcut = x
+        x = self.norm2(x)
+        x = self.ffn(x, h, w)
+        out = shortcut + self.drop2(x)
 
         return out
 

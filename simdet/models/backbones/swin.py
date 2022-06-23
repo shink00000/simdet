@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..layers import nlc_to_nchw, nchw_to_nlc, DropPath
+from ..layers import nlc_to_nchw, nchw_to_nlc, MultiheadAttention, DropPath
 
 
 class PatchEmbeding(nn.Module):
@@ -47,10 +47,9 @@ class PatchMerging(nn.Module):
 
 
 class WindowMSA(nn.Module):
-    def __init__(self, embed_dim, n_heads, drop_path_rate, window_size):
+    def __init__(self, embed_dim, n_heads, window_size):
         super().__init__()
-        self.attn = nn.MultiheadAttention(embed_dim, n_heads, batch_first=True)
-        self.drop_path = DropPath(drop_path_rate)
+        self.attn = MultiheadAttention(embed_dim, n_heads)
         self.n_heads = n_heads
         self.window_size = window_size
 
@@ -61,30 +60,23 @@ class WindowMSA(nn.Module):
 
         nn.init.trunc_normal_(self.rel_pos_bias_table, std=0.02)
 
-    def forward(self, x: torch.Tensor, x0: torch.Tensor, h: int, w: int) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, h: int, w: int) -> torch.Tensor:
         """
         Args:
             x (torch.Tensor): (N, L, C)
-            x0 (torch.Tensor): (N, L, C)
             h (int): input height
             w (int): input width
 
         Returns:
             torch.Tensor: (N, L, C)
         """
-        n = x.size(0)
-
         bias = self.rel_pos_bias_table.view(-1, (2*self.window_size-1)**2)[
             :, self.rel_pos_index
-        ]  # (nH, window_size**2, window_size**2)
+        ].unsqueeze(0)  # (1, nH, window_size**2, window_size**2)
 
         x = self.window_partition(x, h, w, self.window_size)  # (N*nW, window_size**2, C)
-        nw = x.size(0) // n
-        attn_mask = bias.repeat(n * nw, 1, 1)
-        x = self.attn(x, x, x, attn_mask=attn_mask, need_weights=False)[0]
-        x = self.window_reverse(x, h, w, self.window_size)  # (N, L, C)
-
-        out = x0 + self.drop_path(x)
+        x = self.attn(x, x, x, attn_mask=bias)
+        out = self.window_reverse(x, h, w, self.window_size)  # (N, L, C)
 
         return out
 
@@ -94,7 +86,7 @@ class WindowMSA(nn.Module):
         """
         coords_h = torch.arange(self.window_size)
         coords_w = torch.arange(self.window_size)
-        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
+        coords = torch.stack(torch.meshgrid([coords_h, coords_w], indexing='ij'))  # 2, Wh, Ww
         coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
         relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
         relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2
@@ -150,16 +142,15 @@ class WindowMSA(nn.Module):
 
 
 class ShiftedWindowMSA(WindowMSA):
-    def __init__(self, embed_dim, n_heads, drop_path_rate, window_size, shift_size):
-        super().__init__(embed_dim, n_heads, drop_path_rate, window_size)
+    def __init__(self, embed_dim, n_heads, window_size, shift_size):
+        super().__init__(embed_dim, n_heads, window_size)
         self.shift_size = shift_size
         self.mask = None
 
-    def forward(self, x: torch.Tensor, x0: torch.Tensor, h: int, w: int) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, h: int, w: int) -> torch.Tensor:
         """
         Args:
             x (torch.Tensor): (N, L, C)
-            x0 (torch.Tensor): (N, L, C)
             h (int): input height
             w (int): input width
 
@@ -170,7 +161,7 @@ class ShiftedWindowMSA(WindowMSA):
 
         bias = self.rel_pos_bias_table.view(-1, (2*self.window_size-1)**2)[
             :, self.rel_pos_index
-        ]  # (nH, window_size**2, window_size**2)
+        ].unsqueeze(0)  # (1, nH, window_size**2, window_size**2)
 
         if self.mask is None:
             mask = torch.zeros((1, h, w, 1), device=x.device)
@@ -186,17 +177,14 @@ class ShiftedWindowMSA(WindowMSA):
             mask = mask - mask.transpose(1, 2)
             mask = mask.masked_fill(mask != 0, float('-inf')).masked_fill(mask == 0, float(0.0))
             self.mask = mask  # (nW, window_size**2, window_size**2)
-        mask = self.mask.unsqueeze(1)
+        mask = self.mask.unsqueeze(1).repeat(n, 1, 1, 1)
 
         x = self.cyclic_shift(x, h, w, -self.shift_size)
         x = self.window_partition(x, h, w, self.window_size)  # (N*nW, window_size**2, C)
-        nw = x.size(0) // n
-        attn_mask = bias.repeat(n * nw, 1, 1) + mask.repeat(n, self.n_heads, 1, 1).flatten(0, 1)
-        x = self.attn(x, x, x, attn_mask=attn_mask, need_weights=False)[0]
+        attn_mask = bias + mask
+        x = self.attn(x, x, x, attn_mask=attn_mask)
         x = self.window_reverse(x, h, w, self.window_size)  # (N, L, C)
-        x = self.cyclic_shift(x, h, w, self.shift_size)
-
-        out = x0 + self.drop_path(x)
+        out = self.cyclic_shift(x, h, w, self.shift_size)
 
         return out
 
@@ -209,20 +197,16 @@ class ShiftedWindowMSA(WindowMSA):
         return out
 
 
-class MLP(nn.Module):
-    def __init__(self, embed_dim, drop_path_rate):
+class FFN(nn.Module):
+    def __init__(self, embed_dim):
         super().__init__()
         hidden_dim = 4 * embed_dim
         self.fc1 = nn.Linear(embed_dim, hidden_dim)
         self.act = nn.GELU()
         self.fc2 = nn.Linear(hidden_dim, embed_dim)
-        self.drop_path = DropPath(drop_path_rate)
 
-    def forward(self, x, x0):
-        x = self.fc1(x)
-        x = self.act(x)
-        x = self.fc2(x)
-        out = x0 + self.drop_path(x)
+    def forward(self, x):
+        out = self.fc2(self.act(self.fc1(x)))
 
         return out
 
@@ -232,15 +216,24 @@ class TransformerLayer(nn.Module):
         super().__init__()
         self.norm1 = nn.LayerNorm(embed_dim)
         if shift_size > 0:
-            self.attn = ShiftedWindowMSA(embed_dim, n_heads, drop_path_rate, window_size, shift_size)
+            self.attn = ShiftedWindowMSA(embed_dim, n_heads, window_size, shift_size)
         else:
-            self.attn = WindowMSA(embed_dim, n_heads, drop_path_rate, window_size)
+            self.attn = WindowMSA(embed_dim, n_heads, window_size)
+        self.drop1 = DropPath(drop_path_rate)
         self.norm2 = nn.LayerNorm(embed_dim)
-        self.ffn = MLP(embed_dim, drop_path_rate)
+        self.ffn = FFN(embed_dim)
+        self.drop2 = DropPath(drop_path_rate)
 
     def forward(self, x, h, w):
-        x = self.attn(self.norm1(x), x, h, w)
-        out = self.ffn(self.norm2(x), x)
+        shortcut = x
+        x = self.norm1(x)
+        x = self.attn(x, h, w)
+        x = shortcut + self.drop1(x)
+
+        shortcut = x
+        x = self.norm2(x)
+        x = self.ffn(x)
+        out = shortcut + self.drop2(x)
 
         return out
 

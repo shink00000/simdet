@@ -118,3 +118,30 @@ This repository will reproduce and implement well-known Detection models.
   Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.475
   Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.774
   ```
+
+## [DAB-DETR](https://arxiv.org/abs/2201.12329)
+
+### DABDETR-R50 [[arch](./docs/archs/dabdetr_r50.txt)]
+
+- changes:
+  - num_queries: 100 -> 40
+- [config](./configs/dabdetr_r50_voc_h512_w512.yaml)
+  - data: PascalVOC 2017 + 2012
+  - input_size: (512, 512)
+  - backbone: ResNet50
+- [tensorboard](https://tensorboard.dev/experiment/ZgCWEZBZTn2G9HXXj4JLFg/)
+- evaluation result
+  ```
+  Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.513
+  Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets=100 ] = 0.809
+  Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets=100 ] = 0.545
+  Average Precision  (AP) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.092
+  Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.288
+  Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.611
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=  1 ] = 0.457
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 10 ] = 0.614
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets=100 ] = 0.632
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area= small | maxDets=100 ] = 0.181
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets=100 ] = 0.429
+  Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets=100 ] = 0.727
+  ```
